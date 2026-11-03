@@ -1,0 +1,13 @@
+{
+  "name": "brsbooking",
+  "private": true,
+  "type": "module",
+  "description": "ระบบจองเวรหน่วยเจาะเลือด — หน้าเว็บบน Vercel + Apps Script/Google Sheets",
+  "scripts": {
+    "dev": "node dev/server.mjs",
+    "test": "node test/run-all.mjs"
+  },
+  "devDependencies": {
+    "xlsx": "0.18.5"
+  }
+}

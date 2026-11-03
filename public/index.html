@@ -1,0 +1,345 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ระบบจองเวรหน่วยเจาะเลือด</title>
+  <meta name="description" content="ระบบจองเวรหน่วยเจาะเลือดเก็บสิ่งส่งตรวจและ POCT งานห้องปฏิบัติการเวชศาสตร์ชันสูตร โรงพยาบาลศรีนครินทร์">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%236C82EC'/%3E%3Cpath d='M32 12c-8 11-14 19-14 27a14 14 0 0 0 28 0c0-8-6-16-14-27z' fill='%23fff'/%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="topbar no-print">
+    <div class="brand">
+      <span class="brand-mark" aria-hidden="true"></span>
+      <div>
+        <div class="brand-title" id="app-title">ระบบจองเวรหน่วยเจาะเลือดเก็บสิ่งส่งตรวจและPOCT</div>
+        <div class="brand-sub" id="app-org">งานห้องปฏิบัติการเวชศาสตร์ชันสูตร โรงพยาบาลศรีนครินทร์</div>
+      </div>
+    </div>
+    <div class="topbar-actions" id="topbar-actions"></div>
+  </header>
+
+  <main class="wrap no-print" id="main">
+    <!-- ===== Loading ===== -->
+    <section id="view-loading" class="view">
+      <div class="card center muted">กำลังโหลดข้อมูล...</div>
+    </section>
+
+    <!-- ===== Login ===== -->
+    <section id="view-login" class="view" hidden>
+      <div class="card login-card">
+        <h1 class="h1">เข้าสู่ระบบจองเวร</h1>
+        <p class="muted">เลือกชื่อของคุณแล้วกรอก PIN</p>
+
+        <label class="label" for="staff-search">ชื่อ-นามสกุล</label>
+        <div class="combo" id="staff-combo">
+          <input class="input" id="staff-search" type="text" autocomplete="off" placeholder="พิมพ์ชื่อหรือนามสกุลเพื่อค้นหา">
+          <div class="combo-list" id="staff-options" role="listbox" hidden></div>
+        </div>
+        <div class="picked" id="staff-picked" hidden></div>
+
+        <div id="pin-login-block">
+          <label class="label" for="login-pin">PIN</label>
+          <input class="input pin" id="login-pin" type="password" inputmode="numeric" maxlength="6" autocomplete="current-password" placeholder="ตัวเลข 4–6 หลัก">
+          <button class="btn btn-primary btn-block" id="btn-login">เข้าสู่ระบบ</button>
+        </div>
+
+        <div id="pin-setup-block" hidden>
+          <div class="alert alert-info">ครั้งแรกที่ใช้งาน กรุณาตั้ง PIN ตัวเลข 4–6 หลัก สำหรับเข้าสู่ระบบครั้งถัดไป</div>
+          <label class="label" for="setup-pin">ตั้ง PIN</label>
+          <input class="input pin" id="setup-pin" type="password" inputmode="numeric" maxlength="6" autocomplete="new-password">
+          <label class="label" for="setup-pin2">ยืนยัน PIN</label>
+          <input class="input pin" id="setup-pin2" type="password" inputmode="numeric" maxlength="6" autocomplete="new-password">
+          <button class="btn btn-primary btn-block" id="btn-setpin">ตั้ง PIN และเข้าสู่ระบบ</button>
+        </div>
+
+        <div class="login-links">
+          <button class="link" id="btn-open-request">ไม่พบชื่อของคุณ? ขอเพิ่มรายชื่อ</button>
+          <button class="link link-admin" id="btn-open-admin" title="สำหรับผู้ดูแลระบบ">&#128273; ผู้ดูแลระบบ</button>
+        </div>
+      </div>
+      <div class="notice" id="notice-login"></div>
+    </section>
+
+    <!-- ===== User booking ===== -->
+    <section id="view-user" class="view" hidden>
+      <div class="user-strip card">
+        <div>
+          <div class="hello" id="hello"></div>
+          <div class="muted small" id="user-position"></div>
+        </div>
+        <div class="row gap">
+          <button class="btn btn-accent" id="btn-summary">สรุปเวรของฉัน</button>
+          <button class="btn btn-ghost" id="btn-change-pin">เปลี่ยน PIN</button>
+        </div>
+      </div>
+
+      <div class="layout">
+        <div class="card">
+          <div class="cal-head">
+            <button class="btn btn-icon" id="cal-prev" aria-label="เดือนก่อนหน้า">&#8249;</button>
+            <div class="cal-title" id="cal-title"></div>
+            <button class="btn btn-icon" id="cal-next" aria-label="เดือนถัดไป">&#8250;</button>
+          </div>
+          <div class="month-status" id="month-status"></div>
+          <div class="cal-grid cal-dow">
+            <div class="sun">อา</div><div>จ</div><div>อ</div><div>พ</div><div>พฤ</div><div>ศ</div><div class="sat">ส</div>
+          </div>
+          <div class="cal-grid" id="calendar"></div>
+          <div class="legend">
+            <span><i class="lg lg-booked"></i>มีเวรที่จอง</span>
+            <span><i class="lg lg-weekend"></i>เสาร์-อาทิตย์</span>
+            <span><i class="lg lg-holiday"></i>วันหยุดราชการ</span>
+            <span><i class="lg lg-today"></i>วันนี้</span>
+          </div>
+        </div>
+
+        <div class="card day-panel" id="day-panel">
+          <div class="muted center">เลือกวันที่บนปฏิทินเพื่อดูหรือจองเวร</div>
+        </div>
+      </div>
+      <div class="notice" id="notice-user"></div>
+    </section>
+
+    <!-- ===== Admin ===== -->
+    <section id="view-admin" class="view" hidden>
+      <div class="card admin-head">
+        <nav class="tabs" id="admin-tabs">
+          <button data-tab="roster" class="active">ตารางเวร</button>
+          <button data-tab="staff">บุคลากร <span class="badge badge-warn" id="pending-badge" hidden></span></button>
+          <button data-tab="holidays">วันหยุด</button>
+          <button data-tab="settings">ตั้งค่า</button>
+        </nav>
+      </div>
+
+      <div class="admin-pane" data-pane="roster">
+        <div class="card">
+          <div class="toolbar">
+            <div class="row gap center-y">
+              <button class="btn btn-icon" id="adm-prev" aria-label="เดือนก่อนหน้า">&#8249;</button>
+              <div class="cal-title" id="adm-title"></div>
+              <button class="btn btn-icon" id="adm-next" aria-label="เดือนถัดไป">&#8250;</button>
+            </div>
+            <div class="row gap wrap-row">
+              <button class="btn btn-primary" id="adm-add">+ เพิ่มการจอง</button>
+              <button class="btn btn-ghost" id="adm-excel">Export Excel</button>
+              <button class="btn btn-ghost" id="adm-pdf">พิมพ์ / PDF</button>
+            </div>
+          </div>
+          <div class="filters">
+            <select class="input" id="f-room"><option value="">ทุกห้อง</option></select>
+            <select class="input" id="f-station"><option value="">ทุกจุด</option></select>
+            <select class="input" id="f-position"><option value="">ทุกตำแหน่ง</option></select>
+            <input class="input" id="f-date" type="date" aria-label="กรองวันที่">
+            <input class="input" id="f-name" type="search" placeholder="ค้นหาชื่อ">
+          </div>
+          <div class="stats" id="adm-stats"></div>
+          <div class="table-wrap"><table class="table" id="adm-table"></table></div>
+        </div>
+        <div class="card">
+          <h2 class="h2">ลาเวร / ยกเลิก ในเดือนนี้</h2>
+          <div class="table-wrap"><table class="table" id="adm-leave-table"></table></div>
+        </div>
+      </div>
+
+      <div class="admin-pane" data-pane="staff" hidden>
+        <div class="card" id="pending-card" hidden>
+          <h2 class="h2">คำขอเพิ่มรายชื่อที่รออนุมัติ</h2>
+          <div class="table-wrap"><table class="table" id="pending-table"></table></div>
+        </div>
+        <div class="card">
+          <div class="toolbar">
+            <h2 class="h2">รายชื่อบุคลากร</h2>
+            <div class="row gap wrap-row">
+              <input class="input" id="staff-filter" type="search" placeholder="ค้นหาชื่อ">
+              <button class="btn btn-primary" id="staff-add">+ เพิ่มบุคลากร</button>
+            </div>
+          </div>
+          <div class="table-wrap"><table class="table" id="staff-table"></table></div>
+        </div>
+      </div>
+
+      <div class="admin-pane" data-pane="holidays" hidden>
+        <div class="card">
+          <div class="toolbar">
+            <h2 class="h2">วันหยุดราชการ</h2>
+            <div class="row gap wrap-row">
+              <select class="input" id="hol-year"></select>
+              <button class="btn btn-ghost" id="hol-add">+ เพิ่มวันหยุด</button>
+              <button class="btn btn-primary" id="hol-save">บันทึกวันหยุด</button>
+            </div>
+          </div>
+          <p class="muted small">แก้ไขได้ทันทีเมื่อมีประกาศเปลี่ยนแปลงจากรัฐบาล — วันหยุดที่บันทึกจะแสดงบนปฏิทินและใช้ช่วงเวลาแบบวันเสาร์-อาทิตย์ (เลือกได้ 1 ช่วง) ตามที่ตั้งค่าไว้</p>
+          <div class="table-wrap"><table class="table" id="hol-table"></table></div>
+        </div>
+      </div>
+
+      <div class="admin-pane" data-pane="settings" hidden>
+        <div class="card settings">
+          <h2 class="h2">ตั้งค่ารอบการจอง</h2>
+          <label class="switch"><input type="checkbox" id="set-open"><span>เปิดรับจองเวร</span></label>
+          <label class="label">เดือนที่เปิดให้จอง</label>
+          <p class="muted small">ถ้าไม่เลือกเดือนใดเลย ผู้ใช้จองได้ทุกเดือนตั้งแต่วันนี้เป็นต้นไป เมื่อเดือนใดปิดแล้ว การยกเลิกจะถูกบันทึกเป็น "ลาเวร" พร้อมเหตุผล</p>
+          <div class="row gap wrap-row">
+            <input class="input" type="month" id="set-month-input" aria-label="เลือกเดือน">
+            <button class="btn btn-ghost" id="set-month-add">+ เพิ่มเดือน</button>
+          </div>
+          <div class="chips" id="set-months"></div>
+          <label class="switch"><input type="checkbox" id="set-holiday-rule"><span>วันหยุดราชการใช้ช่วงเวลาแบบวันเสาร์-อาทิตย์ (จองได้ 1 เวร)</span></label>
+          <label class="label" for="set-notice">ข้อความประกาศ</label>
+          <textarea class="input" id="set-notice" rows="4"></textarea>
+          <label class="label" for="set-contact">เบอร์ติดต่อ</label>
+          <input class="input" id="set-contact" type="text">
+          <button class="btn btn-primary" id="set-save">บันทึกการตั้งค่า</button>
+        </div>
+      </div>
+    </section>
+
+    <footer class="credit">พัฒนาโดย ทนพญ. มุกดารัตน์ สุพัฒน์</footer>
+  </main>
+
+  <!-- ===== Dialogs ===== -->
+  <dialog id="dlg-booking" class="dlg">
+    <form method="dialog" class="dlg-body" id="booking-form">
+      <h3 class="h2" id="booking-title">จองเวร</h3>
+      <div class="field-static" id="booking-date"></div>
+      <div id="booking-staff-field" hidden>
+        <label class="label" for="booking-staff">บุคลากร</label>
+        <select class="input" id="booking-staff"></select>
+      </div>
+      <label class="label" for="booking-room">ห้อง</label>
+      <select class="input" id="booking-room"></select>
+      <label class="label" for="booking-station">จุดปฏิบัติงาน</label>
+      <select class="input" id="booking-station"></select>
+      <div id="booking-date-field" hidden>
+        <label class="label" for="booking-date-input">วันที่</label>
+        <input class="input" type="date" id="booking-date-input">
+      </div>
+      <label class="label">ช่วงเวลา</label>
+      <div class="slot-hint muted small" id="booking-hint"></div>
+      <div class="slots" id="booking-slots"></div>
+      <div class="dlg-actions">
+        <button type="button" class="btn btn-ghost" data-close>ยกเลิก</button>
+        <button type="submit" class="btn btn-primary" id="booking-submit">บันทึก</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="dlg-summary" class="dlg dlg-wide">
+    <div class="dlg-body">
+      <div class="toolbar">
+        <h3 class="h2">สรุปเวรของฉัน</h3>
+        <div class="seg" id="summary-seg">
+          <button data-mode="month" class="active">เดือนที่เลือก</button>
+          <button data-mode="upcoming">ล่วงหน้าทั้งหมด</button>
+        </div>
+      </div>
+      <div id="summary-content"></div>
+      <div class="dlg-actions">
+        <button type="button" class="btn btn-ghost" id="summary-print">พิมพ์ / PDF</button>
+        <button type="button" class="btn btn-primary" data-close>ปิด</button>
+      </div>
+    </div>
+  </dialog>
+
+  <dialog id="dlg-request" class="dlg">
+    <form method="dialog" class="dlg-body" id="request-form">
+      <h3 class="h2">ขอเพิ่มรายชื่อ</h3>
+      <p class="muted small">ผู้ดูแลระบบจะตรวจสอบและอนุมัติก่อน จึงจะเข้าสู่ระบบได้</p>
+      <label class="label" for="req-first">ชื่อ</label>
+      <input class="input" id="req-first" required maxlength="60">
+      <label class="label" for="req-last">นามสกุล</label>
+      <input class="input" id="req-last" required maxlength="60">
+      <label class="label" for="req-position">ตำแหน่ง</label>
+      <select class="input" id="req-position" required></select>
+      <label class="label" for="req-pin">ตั้ง PIN (ตัวเลข 4–6 หลัก)</label>
+      <input class="input pin" id="req-pin" type="password" inputmode="numeric" maxlength="6" required autocomplete="new-password">
+      <label class="label" for="req-pin2">ยืนยัน PIN</label>
+      <input class="input pin" id="req-pin2" type="password" inputmode="numeric" maxlength="6" required autocomplete="new-password">
+      <div class="dlg-actions">
+        <button type="button" class="btn btn-ghost" data-close>ยกเลิก</button>
+        <button type="submit" class="btn btn-primary">ส่งคำขอ</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="dlg-admin-login" class="dlg">
+    <form method="dialog" class="dlg-body" id="admin-login-form">
+      <h3 class="h2">เข้าสู่ระบบผู้ดูแล</h3>
+      <label class="label" for="adm-user">ชื่อผู้ใช้</label>
+      <input class="input" id="adm-user" autocomplete="username" required>
+      <label class="label" for="adm-pass">รหัสผ่าน</label>
+      <input class="input" id="adm-pass" type="password" autocomplete="current-password" required>
+      <div class="dlg-actions">
+        <button type="button" class="btn btn-ghost" data-close>ยกเลิก</button>
+        <button type="submit" class="btn btn-primary">เข้าสู่ระบบ</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="dlg-pin" class="dlg">
+    <form method="dialog" class="dlg-body" id="pin-form">
+      <h3 class="h2">เปลี่ยน PIN</h3>
+      <label class="label" for="pin-old">PIN เดิม</label>
+      <input class="input pin" id="pin-old" type="password" inputmode="numeric" maxlength="6" required autocomplete="current-password">
+      <label class="label" for="pin-new">PIN ใหม่</label>
+      <input class="input pin" id="pin-new" type="password" inputmode="numeric" maxlength="6" required autocomplete="new-password">
+      <label class="label" for="pin-new2">ยืนยัน PIN ใหม่</label>
+      <input class="input pin" id="pin-new2" type="password" inputmode="numeric" maxlength="6" required autocomplete="new-password">
+      <div class="dlg-actions">
+        <button type="button" class="btn btn-ghost" data-close>ยกเลิก</button>
+        <button type="submit" class="btn btn-primary">บันทึก</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="dlg-staff" class="dlg">
+    <form method="dialog" class="dlg-body" id="staff-form">
+      <h3 class="h2" id="staff-title">บุคลากร</h3>
+      <label class="label" for="st-first">ชื่อ</label>
+      <input class="input" id="st-first" required maxlength="60">
+      <label class="label" for="st-last">นามสกุล</label>
+      <input class="input" id="st-last" required maxlength="60">
+      <label class="label" for="st-position">ตำแหน่ง</label>
+      <select class="input" id="st-position" required></select>
+      <label class="label" for="st-status">สถานะ</label>
+      <select class="input" id="st-status">
+        <option value="active">ใช้งาน</option>
+        <option value="pending">รออนุมัติ</option>
+        <option value="inactive">ระงับ</option>
+      </select>
+      <p class="muted small" id="st-note">หากแก้ชื่อหรือตำแหน่ง ระบบจะปรับข้อมูลในรายการจองเดิมของบุคคลนี้ให้ตรงกันด้วย</p>
+      <div class="dlg-actions">
+        <button type="button" class="btn btn-ghost" data-close>ยกเลิก</button>
+        <button type="submit" class="btn btn-primary">บันทึก</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="dlg-ask" class="dlg">
+    <form method="dialog" class="dlg-body" id="ask-form">
+      <h3 class="h2" id="ask-title"></h3>
+      <div id="ask-text" class="ask-text"></div>
+      <div id="ask-input-wrap" hidden>
+        <label class="label" for="ask-input" id="ask-input-label"></label>
+        <textarea class="input" id="ask-input" rows="3" maxlength="300"></textarea>
+      </div>
+      <div class="dlg-actions">
+        <button type="button" class="btn btn-ghost" id="ask-cancel">ยกเลิก</button>
+        <button type="submit" class="btn btn-primary" id="ask-ok">ตกลง</button>
+      </div>
+    </form>
+  </dialog>
+
+  <div id="busy" class="busy" hidden><div class="busy-box">กำลังดำเนินการ...</div></div>
+  <div id="toasts" class="toasts" aria-live="polite"></div>
+  <div id="print-area" class="print-only"></div>
+
+  <script src="config.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
