@@ -4,10 +4,16 @@
   "type": "module",
   "description": "ระบบจองเวรหน่วยเจาะเลือด — หน้าเว็บบน Vercel + Apps Script/Google Sheets",
   "scripts": {
+    "build": "tailwindcss -i src/styles.css -o public/app.css --minify",
     "dev": "node dev/server.mjs",
-    "test": "node test/run-all.mjs"
+    "test": "npm run build && node test/run-all.mjs",
+    "vendor": "cp node_modules/lucide/dist/umd/lucide.min.js node_modules/xlsx/dist/xlsx.full.min.js public/vendor/"
   },
   "devDependencies": {
+    "@tailwindcss/cli": "^4.3.4",
+    "daisyui": "^5.7.50",
+    "lucide": "^0.577.0",
+    "tailwindcss": "^4.3.4",
     "xlsx": "0.18.5"
   }
 }

@@ -12,14 +12,22 @@ import gasHandler from '../api/gas.js';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const PUB = path.join(ROOT, 'public');
 const PORT = Number(process.env.PORT || 3000);
-const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.json': 'application/json', '.svg': 'image/svg+xml' };
+// ใช้ security headers ชุดเดียวกับ vercel.json เพื่อให้การทดสอบตรงกับของจริง (รวม CSP)
+const VERCEL_HEADERS = JSON.parse(fs.readFileSync(path.join(ROOT, 'vercel.json'), 'utf8')).headers[0].headers;
+const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.json': 'application/json', '.svg': 'image/svg+xml', '.png': 'image/png', '.webmanifest': 'application/manifest+json' };
 
 let gas;
+// FIXTURE_FILE=ไฟล์ JSON {values:[[...]]} ของแท็บ Booking Data (ไม่รวมหัวตาราง) เพื่อทดสอบกับข้อมูลจริงบนเครื่อง — อย่า commit ไฟล์ข้อมูลจริง
+function loadRows() {
+  if (!process.env.FIXTURE_FILE) return bookingRows();
+  const v = JSON.parse(fs.readFileSync(process.env.FIXTURE_FILE, 'utf8')).values;
+  return [bookingRows()[0]].concat(v);
+}
 function resetMock() {
   gas = createGas({
     now: process.env.MOCK_NOW || undefined,
     props: { ADMIN_USER: 'admin', ADMIN_PASS: 'admin1234' },
-    sheets: { 'Booking Data': bookingRows(), Leave: [LEAVE_HEADER] }
+    sheets: { 'Booking Data': loadRows(), Leave: [LEAVE_HEADER] }
   });
 }
 resetMock();
@@ -41,6 +49,7 @@ function shimRes(res) {
 
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://localhost');
+  VERCEL_HEADERS.forEach((h) => { if (h.key !== 'Strict-Transport-Security') res.setHeader(h.key, h.value); });
   if (url.pathname === '/api/gas') {
     const body = await readBody(req);
     if (process.env.GAS_URL) {

@@ -26,7 +26,7 @@ const CONFIG = {
     'เช้า', 'สาย', 'บ่าย', 'นอกเวลาเย็น', 'ดึก', 'ID'],
   LEAVE_HEADERS: ['Timestamp', 'Date', 'ชื่อ', 'นามสกุล', 'ตำแหน่ง', 'Room', 'Station',
     'เช้า', 'สาย', 'บ่าย', 'เย็น', 'ดึก', 'ID', 'ประเภท', 'เหตุผล', 'ดำเนินการโดย'],
-  STAFF_HEADERS: ['ID', 'ชื่อ', 'นามสกุล', 'ตำแหน่ง', 'สถานะ', 'PIN Hash', 'Salt', 'สร้างเมื่อ', 'อัปเดตเมื่อ'],
+  STAFF_HEADERS: ['ID', 'ชื่อ', 'นามสกุล', 'ตำแหน่ง', 'สถานะ', 'PIN Hash', 'Salt', 'สร้างเมื่อ', 'อัปเดตเมื่อ', 'ต้องเปลี่ยน PIN'],
   HOLIDAY_HEADERS: ['Date', 'ชื่อวันหยุด'],
   SETTINGS_HEADERS: ['Key', 'Value', 'คำอธิบาย'],
   POSITIONS: [
@@ -55,6 +55,7 @@ const CONFIG = {
   SESSION_SECONDS: 6 * 60 * 60,
   MAX_FAILS: 5,
   LOCK_MINUTES: 15,
+  MAX_LOCK_MINUTES: 360,
   PIN_ITERATIONS: 300,
   MAX_BODY: 60000,
   DEFAULT_SETTINGS: [
@@ -62,10 +63,13 @@ const CONFIG = {
     ['BOOKING_MONTHS', '', 'เดือนที่เปิดให้จอง รูปแบบ yyyy-MM คั่นด้วย , (ว่าง = ทุกเดือนตั้งแต่วันนี้)'],
     ['NOTICE', 'บุคลากรทุกท่านจองเวลาปฏิบัติงานผ่านเอกสารอิเล็กทรอนิกส์ ส่งภายในวันที่ 26 ของทุกเดือน (หรือจนกว่าจะปิดรับ) เพื่อให้หัวหน้าหน่วยฯหรือผู้รับผิดชอบจัดทำตารางเวรให้เรียบร้อยและจัดสรรจุดปฏิบัติงานได้ทันเวลา', 'ข้อความประกาศท้ายหน้าเว็บ'],
     ['CONTACT', '63662/67204', 'เบอร์ติดต่อ'],
-    ['SPECIAL_DAY_RULE', 'TRUE', 'วันหยุดราชการใช้ช่วงเวลาแบบวันเสาร์-อาทิตย์ (TRUE/FALSE)']
+    ['SPECIAL_DAY_RULE', 'FALSE', 'วันหยุดราชการใช้ช่วงเวลาแบบวันเสาร์-อาทิตย์ (TRUE/FALSE) — ข้อมูลเดิมจองแบบวันธรรมดา จึงปิดไว้'],
+    ['ALLOW_SELF_PIN', 'TRUE', 'ให้บุคลากรตั้ง PIN ครั้งแรกเอง (TRUE/FALSE) — ปิดเมื่อทุกคนตั้ง PIN แล้ว เพื่อกันคนอื่นตั้ง PIN แทน']
   ],
   // วันหยุดตั้งต้น (แก้ไขได้ในหน้าผู้ดูแล)
   DEFAULT_HOLIDAYS: [
+    ['2026-10-13', 'วันนวมินทรมหาราช'],
+    ['2026-10-23', 'วันปิยมหาราช'],
     ['2026-12-05', 'วันคล้ายวันพระบรมราชสมภพ ร.9 วันชาติ และวันพ่อแห่งชาติ'],
     ['2026-12-07', 'ชดเชยวันพ่อแห่งชาติ'],
     ['2026-12-10', 'วันรัฐธรรมนูญ'],
@@ -145,7 +149,7 @@ function doPost(e) {
 
 /** รันครั้งแรกจากหน้าแก้โค้ด เพื่ออนุญาตสิทธิ์และสร้างแท็บ/คอลัมน์ที่ต้องใช้ */
 function setup() {
-  CacheService.getScriptCache().remove('schema_v1');
+  CacheService.getScriptCache().remove('schema_v2');
   ensureSchema_();
   const ss = ss_();
   Logger.log('พร้อมใช้งาน: ' + ss.getName());
@@ -158,7 +162,7 @@ function setup() {
 function getPublicInfo_() {
   const settings = readSettings_();
   const staff = readStaff_().filter(function (s) { return s.status === 'active'; })
-    .map(function (s) { return { id: s.id, name: s.firstName + ' ' + s.lastName, position: s.position, hasPin: !!s.hash }; })
+    .map(function (s) { return { id: s.id, name: s.firstName + ' ' + s.lastName, position: s.position }; })
     .sort(function (a, b) { return a.name.localeCompare(b.name, 'th'); });
   return {
     title: CONFIG.APP_TITLE,
@@ -184,11 +188,13 @@ function login_(a) {
     throw appError_('PIN ไม่ถูกต้อง', 'AUTH');
   }
   clearFails_('u_' + staff.id);
-  return { token: newUserSession_(staff), user: publicUser_(staff) };
+  return { token: newUserSession_(staff), user: publicUser_(staff), mustChange: !!staff.mustChange };
 }
 
 function setFirstPin_(a) {
-  const pin = validPin_(a.pin);
+  if (readSettings_().ALLOW_SELF_PIN !== 'TRUE') throw appError_('ระบบปิดการตั้ง PIN ด้วยตนเอง กรุณาติดต่อผู้ดูแลเพื่อขอ PIN ชั่วคราว', 'SELF_PIN_OFF');
+  const pin = validPin_(a.pin, true);
+  rateLimit_('setpin_all', 60, 3600, 'มีการตั้ง PIN จำนวนมาก กรุณาลองใหม่ภายหลัง');
   return withLock_(function () {
     const staff = findStaff_(str_(a.staffId));
     if (!staff || staff.status !== 'active') throw appError_('ไม่พบรายชื่อ หรือบัญชียังไม่ได้รับการอนุมัติ', 'AUTH');
@@ -196,6 +202,7 @@ function setFirstPin_(a) {
     const salt = newSalt_();
     staff.salt = salt;
     staff.hash = hashPin_(pin, salt);
+    staff.mustChange = false;
     writeStaff_(staff);
     return { token: newUserSession_(staff), user: publicUser_(staff) };
   });
@@ -205,7 +212,7 @@ function requestAccount_(a) {
   const firstName = cleanName_(a.firstName, 'ชื่อ');
   const lastName = cleanName_(a.lastName, 'นามสกุล');
   const position = validPosition_(a.position);
-  const pin = validPin_(a.pin);
+  const pin = validPin_(a.pin, true);
   rateLimit_('req_all', 30, 3600, 'มีคำขอจำนวนมาก กรุณาลองใหม่ภายหลัง');
   return withLock_(function () {
     const exists = readStaff_().some(function (s) { return s.key === nameKey_(firstName, lastName); });
@@ -213,7 +220,7 @@ function requestAccount_(a) {
     const salt = newSalt_();
     const staff = {
       id: newId_('S'), firstName: firstName, lastName: lastName, position: position,
-      status: 'pending', salt: salt, hash: hashPin_(pin, salt), createdAt: nowStr_(), updatedAt: nowStr_()
+      status: 'pending', salt: salt, hash: hashPin_(pin, salt), createdAt: nowStr_(), updatedAt: nowStr_(), mustChange: false
     };
     appendStaff_(staff);
     return { status: 'pending' };
@@ -222,9 +229,12 @@ function requestAccount_(a) {
 
 function changePin_(a) {
   const staff = requireUser_(a.token);
-  const pin = validPin_(a.newPin);
-  if (hashPin_(str_(a.oldPin), staff.salt) !== staff.hash) throw appError_('PIN เดิมไม่ถูกต้อง', 'AUTH');
+  const pin = validPin_(a.newPin, true);
+  checkLocked_('u_' + staff.id);
+  if (hashPin_(str_(a.oldPin), staff.salt) !== staff.hash) { registerFail_('u_' + staff.id); throw appError_('PIN เดิมไม่ถูกต้อง', 'AUTH'); }
+  if (str_(a.oldPin) === pin) throw appError_('PIN ใหม่ต้องไม่ซ้ำกับ PIN เดิม', 'BAD_REQUEST');
   return withLock_(function () {
+    staff.mustChange = false;
     staff.salt = newSalt_();
     staff.hash = hashPin_(pin, staff.salt);
     writeStaff_(staff);
@@ -247,7 +257,7 @@ function getMyBookings_(a) {
   const mine = function (b) { return b.key === staff.key && b.date >= range.from && b.date <= range.to; };
   const bookings = readBookings_().filter(mine).sort(byDate_);
   const leaves = readLeaves_().filter(mine).sort(byDate_);
-  return { user: publicUser_(staff), from: range.from, to: range.to, bookings: bookings.map(cleanBooking_), leaves: leaves.map(cleanBooking_) };
+  return { user: publicUser_(staff), today: todayKey_(), mustChange: !!staff.mustChange, from: range.from, to: range.to, bookings: bookings.map(cleanBooking_), leaves: leaves.map(cleanBooking_) };
 }
 
 function saveBooking_(a) {
@@ -292,12 +302,14 @@ function adminLogin_(a) {
   const user = prop_('ADMIN_USER');
   const pass = prop_('ADMIN_PASS');
   if (!user || !pass) throw appError_('ยังไม่ได้ตั้งรหัสผู้ดูแล (ADMIN_USER / ADMIN_PASS) ใน Script Properties', 'NOT_CONFIGURED');
-  checkLocked_('admin');
+  // ล็อกตามชื่อผู้ใช้ที่พิมพ์ — คนที่ไม่รู้ชื่อผู้ใช้จริงจึงทำให้บัญชีผู้ดูแลถูกล็อกไม่ได้
+  const lockKey = 'admin_' + shortHash_(str_(a.username).toLowerCase());
+  checkLocked_(lockKey);
   if (str_(a.username) !== user || str_(a.password) !== pass) {
-    registerFail_('admin');
+    registerFail_(lockKey);
     throw appError_('ชื่อผู้ใช้หรือรหัสผ่านผู้ดูแลไม่ถูกต้อง', 'AUTH');
   }
-  clearFails_('admin');
+  clearFails_(lockKey);
   const token = newToken_();
   CacheService.getScriptCache().put('adm_' + token, JSON.stringify({ p: shortHash_(user + ':' + pass) }), CONFIG.SESSION_SECONDS);
   return { token: token };
@@ -381,10 +393,16 @@ function adminResetPin_(a) {
   return withLock_(function () {
     const s = findStaff_(str_(a.id));
     if (!s) throw appError_('ไม่พบรายชื่อบุคลากร', 'NOT_FOUND');
-    s.hash = ''; s.salt = '';
-    writeStaff_(s);
     clearFails_('u_' + s.id);
-    return { message: 'รีเซ็ต PIN แล้ว ผู้ใช้จะตั้ง PIN ใหม่ได้เมื่อเข้าสู่ระบบครั้งถัดไป' };
+    if (readSettings_().ALLOW_SELF_PIN === 'TRUE') {
+      s.hash = ''; s.salt = ''; s.mustChange = false;
+      writeStaff_(s);
+      return { message: 'รีเซ็ต PIN แล้ว ผู้ใช้จะตั้ง PIN ใหม่ได้เมื่อเข้าสู่ระบบครั้งถัดไป' };
+    }
+    const temp = tempPin_();
+    s.salt = newSalt_(); s.hash = hashPin_(temp, s.salt); s.mustChange = true;
+    writeStaff_(s);
+    return { tempPin: temp, message: 'ออก PIN ชั่วคราวแล้ว แจ้ง PIN นี้ให้ผู้ใช้โดยตรง ผู้ใช้ต้องเปลี่ยน PIN เมื่อเข้าสู่ระบบ' };
   });
 }
 
@@ -424,7 +442,8 @@ function adminSaveSettings_(a) {
     BOOKING_MONTHS: months.join(','),
     NOTICE: safeCell_(cleanText_(s.NOTICE, 1000)),
     CONTACT: safeCell_(cleanText_(s.CONTACT, 100)),
-    SPECIAL_DAY_RULE: s.SPECIAL_DAY_RULE === false || s.SPECIAL_DAY_RULE === 'FALSE' ? 'FALSE' : 'TRUE'
+    SPECIAL_DAY_RULE: s.SPECIAL_DAY_RULE === true || s.SPECIAL_DAY_RULE === 'TRUE' ? 'TRUE' : 'FALSE',
+    ALLOW_SELF_PIN: s.ALLOW_SELF_PIN === false || s.ALLOW_SELF_PIN === 'FALSE' ? 'FALSE' : 'TRUE'
   };
   return withLock_(function () {
     const sh = sheet_(CONFIG.SHEETS.SETTINGS);
@@ -477,7 +496,7 @@ function isSpecialDay_(date, holidays, settings) {
   const p = date.split('-').map(Number);
   const dow = new Date(Date.UTC(p[0], p[1] - 1, p[2])).getUTCDay();
   if (dow === 0 || dow === 6) return true;
-  if (settings && settings.SPECIAL_DAY_RULE === 'FALSE') return false;
+  if (!settings || settings.SPECIAL_DAY_RULE !== 'TRUE') return false;
   return holidays.some(function (h) { return h.date === date; });
 }
 
@@ -515,15 +534,17 @@ function moveToLeave_(b, type, reason, by) {
 }
 
 function renameInBookings_(oldStaff, firstName, lastName, position) {
-  const sh = sheet_(CONFIG.SHEETS.BOOKING);
-  const data = sh.getDataRange().getValues();
   let n = 0;
-  for (let i = 1; i < data.length; i++) {
-    if (nameKey_(data[i][2], data[i][3]) === oldStaff.key) {
-      sh.getRange(i + 1, 3, 1, 3).setValues([[firstName, lastName, position]]);
-      n++;
+  [CONFIG.SHEETS.BOOKING, CONFIG.SHEETS.LEAVE].forEach(function (name, idx) {
+    const sh = sheet_(name);
+    const data = sh.getDataRange().getValues();
+    for (let i = 1; i < data.length; i++) {
+      if (nameKey_(data[i][2], data[i][3]) === oldStaff.key) {
+        sh.getRange(i + 1, 3, 1, 3).setValues([[safeCell_(firstName), safeCell_(lastName), position]]);
+        if (idx === 0) n++;
+      }
     }
-  }
+  });
   return n;
 }
 
@@ -542,7 +563,7 @@ function sheet_(name) {
 
 function ensureSchema_() {
   const cache = CacheService.getScriptCache();
-  if (cache.get('schema_v1')) return;
+  if (cache.get('schema_v2')) return;
   withLock_(function () {
     const ss = ss_();
     const booking = ensureSheet_(ss, CONFIG.SHEETS.BOOKING, CONFIG.BOOKING_HEADERS);
@@ -564,9 +585,11 @@ function ensureSchema_() {
       const sh = ss.insertSheet(CONFIG.SHEETS.STAFF);
       sh.getRange(1, 1, 1, CONFIG.STAFF_HEADERS.length).setValues([CONFIG.STAFF_HEADERS]);
       seedStaffFromBookings_(sh, booking);
+    } else {
+      ensureSheet_(ss, CONFIG.SHEETS.STAFF, CONFIG.STAFF_HEADERS);
     }
   });
-  cache.put('schema_v1', '1', 21600);
+  cache.put('schema_v2', '1', 21600);
 }
 
 function ensureSheet_(ss, name, headers) {
@@ -606,7 +629,7 @@ function seedStaffFromBookings_(staffSheet, bookingSheet) {
   }
   const rows = Object.keys(map).sort().map(function (k) {
     const m = map[k];
-    return [newId_('S'), m.first, m.last, m.position, 'active', '', '', nowStr_(), nowStr_()];
+    return [newId_('S'), m.first, m.last, m.position, 'active', '', '', nowStr_(), nowStr_(), ''];
   });
   if (rows.length) staffSheet.getRange(2, 1, rows.length, CONFIG.STAFF_HEADERS.length).setValues(rows);
 }
@@ -677,7 +700,7 @@ function readStaff_() {
     const s = {
       id: String(r[0]), firstName: norm_(r[1]), lastName: norm_(r[2]), position: norm_(r[3]),
       status: norm_(r[4]) || 'active', hash: String(r[5] || ''), salt: String(r[6] || ''),
-      createdAt: tsStr_(r[7]), updatedAt: tsStr_(r[8]), row: i + 1
+      createdAt: tsStr_(r[7]), updatedAt: tsStr_(r[8]), mustChange: r[9] === true || String(r[9]).toUpperCase() === 'TRUE', row: i + 1
     };
     s.key = nameKey_(s.firstName, s.lastName);
     out.push(s);
@@ -694,15 +717,18 @@ function writeStaff_(s) {
   const sh = sheet_(CONFIG.SHEETS.STAFF);
   const row = locateRow_(sh, s.id, 1);
   s.updatedAt = nowStr_();
-  sh.getRange(row, 1, 1, 9).setValues([[s.id, s.firstName, s.lastName, s.position, s.status, s.hash, s.salt, s.createdAt, s.updatedAt]]);
+  sh.getRange(row, 6, 1, 2).setNumberFormat('@');
+  sh.getRange(row, 1, 1, 10).setValues([[s.id, safeCell_(s.firstName), safeCell_(s.lastName), s.position, s.status, s.hash, s.salt, s.createdAt, s.updatedAt, s.mustChange ? 'TRUE' : '']]);
 }
 
 function appendStaff_(s) {
-  sheet_(CONFIG.SHEETS.STAFF).appendRow([s.id, safeCell_(s.firstName), safeCell_(s.lastName), s.position, s.status, s.hash, s.salt, s.createdAt, s.updatedAt]);
+  const sh = sheet_(CONFIG.SHEETS.STAFF);
+  sh.getRange(sh.getLastRow() + 1, 6, 1, 2).setNumberFormat('@');
+  sh.appendRow([s.id, safeCell_(s.firstName), safeCell_(s.lastName), s.position, s.status, s.hash, s.salt, s.createdAt, s.updatedAt, s.mustChange ? 'TRUE' : '']);
 }
 
 function adminStaffView_(s) {
-  return { id: s.id, firstName: s.firstName, lastName: s.lastName, position: s.position, status: s.status, hasPin: !!s.hash, createdAt: s.createdAt, updatedAt: s.updatedAt };
+  return { id: s.id, firstName: s.firstName, lastName: s.lastName, position: s.position, status: s.status, hasPin: !!s.hash, mustChange: !!s.mustChange, createdAt: s.createdAt, updatedAt: s.updatedAt };
 }
 
 function publicUser_(s) {
@@ -727,7 +753,8 @@ function readSettings_() {
     if (data[i][0]) s[String(data[i][0])] = typeof data[i][1] === 'boolean' ? (data[i][1] ? 'TRUE' : 'FALSE') : String(data[i][1]);
   }
   s.BOOKING_OPEN = String(s.BOOKING_OPEN).toUpperCase() === 'TRUE' ? 'TRUE' : 'FALSE';
-  s.SPECIAL_DAY_RULE = String(s.SPECIAL_DAY_RULE).toUpperCase() === 'FALSE' ? 'FALSE' : 'TRUE';
+  s.SPECIAL_DAY_RULE = String(s.SPECIAL_DAY_RULE).toUpperCase() === 'TRUE' ? 'TRUE' : 'FALSE';
+  s.ALLOW_SELF_PIN = String(s.ALLOW_SELF_PIN).toUpperCase() === 'FALSE' ? 'FALSE' : 'TRUE';
   return s;
 }
 
@@ -737,7 +764,8 @@ function publicSettings_(s) {
     bookingMonths: str_(s.BOOKING_MONTHS).split(',').map(function (m) { return m.trim(); }).filter(String),
     notice: s.NOTICE || '',
     contact: s.CONTACT || '',
-    holidayAsWeekend: s.SPECIAL_DAY_RULE !== 'FALSE'
+    holidayAsWeekend: s.SPECIAL_DAY_RULE === 'TRUE',
+    allowSelfPin: s.ALLOW_SELF_PIN === 'TRUE'
   };
 }
 
@@ -776,13 +804,24 @@ function requireAdmin_(token) {
 
 function checkLocked_(key) {
   const n = Number(CacheService.getScriptCache().get('fail_' + key) || 0);
-  if (n >= CONFIG.MAX_FAILS) throw appError_('ใส่รหัสผิดหลายครั้ง บัญชีถูกล็อกชั่วคราว ' + CONFIG.LOCK_MINUTES + ' นาที', 'LOCKED');
+  if (n >= CONFIG.MAX_FAILS) {
+    const m = Number(CacheService.getScriptCache().get('lockm_' + key) || CONFIG.LOCK_MINUTES);
+    throw appError_('ใส่รหัสผิดหลายครั้ง บัญชีถูกล็อกชั่วคราว ' + m + ' นาที', 'LOCKED');
+  }
 }
 
 function registerFail_(key) {
   const c = CacheService.getScriptCache();
   const n = Number(c.get('fail_' + key) || 0) + 1;
-  c.put('fail_' + key, String(n), CONFIG.LOCK_MINUTES * 60);
+  let minutes = CONFIG.LOCK_MINUTES;
+  if (n >= CONFIG.MAX_FAILS) {
+    // ถูกล็อกซ้ำ → เวลาล็อกเพิ่มเป็นเท่าตัว (15, 30, 60, ... สูงสุด 6 ชั่วโมง) กันการสุ่ม PIN
+    const rounds = Number(c.get('lockn_' + key) || 0) + 1;
+    c.put('lockn_' + key, String(rounds), 21600);
+    minutes = Math.min(CONFIG.LOCK_MINUTES * Math.pow(2, rounds - 1), CONFIG.MAX_LOCK_MINUTES);
+    c.put('lockm_' + key, String(minutes), minutes * 60);
+  }
+  c.put('fail_' + key, String(n), minutes * 60);
 }
 
 function clearFails_(key) {
@@ -818,9 +857,23 @@ function newId_(prefix) { return prefix + Utilities.getUuid().replace(/-/g, '').
 
 /* =========================== Validation & utils =========================== */
 
-function validPin_(pin) {
+function validPin_(pin, isNew) {
   const p = str_(pin);
   if (!/^\d{4,6}$/.test(p)) throw appError_('PIN ต้องเป็นตัวเลข 4–6 หลัก', 'BAD_REQUEST');
+  if (isNew && isWeakPin_(p)) throw appError_('PIN เดาง่ายเกินไป (เช่น 1234, 0000, 1212) กรุณาตั้งใหม่', 'WEAK_PIN');
+  return p;
+}
+
+function isWeakPin_(p) {
+  if (/^(\d)\1+$/.test(p)) return true;                       // 0000, 111111
+  if ('01234567890'.indexOf(p) >= 0 || '09876543210'.indexOf(p) >= 0) return true; // เรียงกัน
+  if (p.length % 2 === 0 && p.slice(0, 2).repeat(p.length / 2) === p) return true;  // 1212, 2525
+  return ['123123', '112233', '121212'].indexOf(p) >= 0;
+}
+
+function tempPin_() {
+  let p;
+  do { p = String(100000 + parseInt(Utilities.getUuid().replace(/-/g, '').slice(0, 12), 16) % 900000); } while (isWeakPin_(p));
   return p;
 }
 

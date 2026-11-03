@@ -1,0 +1,140 @@
+/* แหล่ง CSS — สร้าง public/app.css ด้วย `npm run build` (Tailwind CSS 4 + daisyUI 5) */
+@import "tailwindcss";
+@source "../public/index.html";
+@source "../public/app.js";
+
+@plugin "daisyui" {
+  themes: corporate --default, business --prefersdark;
+}
+
+@theme {
+  --font-sans: "Sarabun", ui-sans-serif, system-ui, sans-serif;
+}
+
+/* ---------- พื้นฐาน ---------- */
+html, body { overflow-x: hidden; }
+body { font-family: var(--font-sans); -webkit-tap-highlight-color: transparent; }
+[hidden] { display: none !important; }
+:root { --nav-h: 64px; --holiday: oklch(64% 0.19 45); --holiday-ink: oklch(50% 0.17 40); }
+@media (prefers-color-scheme: dark) { :root { --holiday-ink: oklch(78% 0.14 55); } }
+.text-holiday { color: var(--holiday-ink); }
+.bg-holiday-soft { background: color-mix(in oklab, var(--holiday) 16%, transparent); }
+.badge-holiday { background: color-mix(in oklab, var(--holiday) 16%, transparent); color: var(--holiday-ink); border-color: transparent; }
+
+/* ไอคอนในกล่องสี */
+.icon-tile { display: inline-grid; place-items: center; flex: none; width: 2.5rem; height: 2.5rem; border-radius: .75rem; }
+.icon-tile svg { width: 1.25rem; height: 1.25rem; }
+.icon-tile-sm { width: 2rem; height: 2rem; border-radius: .6rem; }
+.icon-tile-sm svg { width: 1rem; height: 1rem; }
+.lucide { flex: none; }
+
+/* ---------- แถบโหลด (ไม่บังหน้าจอ) ---------- */
+.progress-line { position: fixed; inset: 0 0 auto 0; height: 3px; z-index: 80; overflow: hidden; pointer-events: none; opacity: 0; transition: opacity .2s; }
+.progress-line::after { content: ""; position: absolute; inset: 0; width: 40%; background: var(--color-primary); border-radius: 0 3px 3px 0; animation: progress-slide 1.1s ease-in-out infinite; }
+body[data-loading] .progress-line { opacity: 1; }
+@keyframes progress-slide { 0% { transform: translateX(-100%); } 100% { transform: translateX(260%); } }
+
+/* ---------- ปฏิทิน ---------- */
+.cal-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: .4rem; }
+.cal-day {
+  position: relative; display: flex; flex-direction: column; align-items: stretch; gap: 2px; text-align: left;
+  min-height: clamp(64px, 10.5vh, 128px); padding: .4rem; border-radius: .75rem; overflow: hidden;
+  border: 1px solid var(--color-base-300); background: var(--color-base-100); cursor: pointer;
+  transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease;
+}
+.cal-day:hover { border-color: var(--color-primary); box-shadow: 0 6px 16px -8px color-mix(in oklab, var(--color-primary) 60%, transparent); transform: translateY(-1px); }
+.cal-day:active { transform: scale(.97); }
+.cal-day.is-empty { visibility: hidden; pointer-events: none; }
+.cal-day.is-sat { background: color-mix(in oklab, var(--color-warning) 12%, var(--color-base-100)); }
+.cal-day.is-sun { background: color-mix(in oklab, var(--color-error) 9%, var(--color-base-100)); }
+.cal-day.is-holiday { background: color-mix(in oklab, var(--holiday) 15%, var(--color-base-100)); border-color: color-mix(in oklab, var(--holiday) 35%, var(--color-base-300)); }
+.cal-day.is-past { opacity: .6; }
+.cal-day.is-today { box-shadow: inset 0 0 0 2px var(--color-primary); }
+.cal-day.is-selected { border-color: var(--color-primary); box-shadow: 0 0 0 3px color-mix(in oklab, var(--color-primary) 30%, transparent); }
+.cal-day .num { font-weight: 700; line-height: 1.1; display: flex; align-items: center; justify-content: space-between; gap: 2px; }
+.cal-day .hname { font-size: .72rem; line-height: 1.2; color: var(--holiday-ink); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.cal-day .chip { display: block; font-size: .74rem; line-height: 1.25; padding: 1px 5px; border-radius: .4rem; font-weight: 600;
+  background: color-mix(in oklab, var(--color-success) 18%, var(--color-base-100)); color: color-mix(in oklab, var(--color-success) 70%, var(--color-base-content)); overflow-wrap: anywhere; }
+.cal-day .chip .slots { font-weight: 500; }
+.cal-dow { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: .4rem; text-align: center; font-size: .85rem; font-weight: 600; opacity: .7; margin-bottom: .4rem; }
+.legend-dot { width: .8rem; height: .8rem; border-radius: .25rem; display: inline-block; border: 1px solid var(--color-base-300); }
+
+@media (max-width: 640px) {
+  .cal-grid, .cal-dow { gap: .25rem; }
+  .cal-day { min-height: 60px; padding: .3rem .25rem; border-radius: .6rem; }
+  .cal-day .hname { display: none; }
+  .cal-day .chip { font-size: .68rem; padding: 0 3px; text-align: center; }
+  .cal-day .chip .slots { display: none; }
+  .cal-day .hol-dot { display: inline-block; }
+}
+.cal-day .hol-dot { display: none; width: 6px; height: 6px; border-radius: 99px; background: var(--holiday); }
+
+/* ---------- การแจ้งเตือน (ไม่ขัดจังหวะ: ไม่บังการคลิก ปิดเองอัตโนมัติ) ---------- */
+#toasts { pointer-events: none; z-index: 90; padding-top: calc(var(--nav-h) + .5rem); max-width: min(420px, calc(100vw - 1rem)); }
+#toasts .alert { pointer-events: auto; position: relative; overflow: hidden; box-shadow: 0 12px 30px -12px rgba(0,0,0,.35); animation: toast-in .32s cubic-bezier(.2,.9,.3,1.2) both; }
+#toasts .alert.is-leaving { animation: toast-out .25s ease-in both; }
+#toasts .alert .bar { position: absolute; left: 0; bottom: 0; height: 3px; background: currentColor; opacity: .35; animation: toast-bar linear forwards; }
+@keyframes toast-in { from { opacity: 0; transform: translateY(-10px) scale(.96); } to { opacity: 1; transform: none; } }
+@keyframes toast-out { to { opacity: 0; transform: translateX(24px); } }
+@keyframes toast-bar { from { width: 100%; } to { width: 0; } }
+@media (max-width: 640px) {
+  #toasts { left: 50%; right: auto; transform: translateX(-50%); width: calc(100vw - 1rem); }
+}
+
+/* ---------- Motion ---------- */
+.motion-fade-up { animation: fade-up .45s cubic-bezier(.2,.8,.2,1) both; animation-delay: calc(var(--i, 0) * 60ms); }
+.motion-pop { animation: pop .35s cubic-bezier(.2,.9,.3,1.3) both; animation-delay: calc(var(--i, 0) * 8ms); }
+.motion-slide-left { animation: slide-in-left .3s ease both; }
+.motion-slide-right { animation: slide-in-right .3s ease both; }
+@keyframes fade-up { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+@keyframes pop { from { opacity: 0; transform: scale(.92); } to { opacity: 1; transform: none; } }
+@keyframes slide-in-left { from { opacity: 0; transform: translateX(-24px); } to { opacity: 1; transform: none; } }
+@keyframes slide-in-right { from { opacity: 0; transform: translateX(24px); } to { opacity: 1; transform: none; } }
+.login-bg {
+  background:
+    radial-gradient(1000px 500px at 10% -10%, color-mix(in oklab, var(--color-primary) 22%, transparent), transparent 60%),
+    radial-gradient(800px 400px at 110% 110%, color-mix(in oklab, var(--color-accent) 20%, transparent), transparent 60%),
+    var(--color-base-200);
+}
+.float-slow { animation: float 6s ease-in-out infinite; }
+@keyframes float { 50% { transform: translateY(-8px); } }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+}
+
+/* ---------- ฟอร์ม/มือถือ ---------- */
+@media (pointer: coarse) {
+  .btn-sm { min-height: 2.5rem; height: auto; }
+  .btn-xs { min-height: 2.25rem; height: auto; }
+}
+@media (max-width: 1023px) {
+  input, select, textarea { font-size: 16px !important; } /* กัน iPhone ซูมเมื่อแตะช่องกรอก */
+}
+.modal-box { max-height: calc(100dvh - 2rem); }
+.modal-actions-sticky { position: sticky; bottom: -1.5rem; margin: 1rem -1.5rem -1.5rem; padding: .9rem 1.5rem calc(.9rem + env(safe-area-inset-bottom)); background: var(--color-base-100); border-top: 1px solid var(--color-base-300); display: flex; gap: .5rem; justify-content: flex-end; flex-wrap: wrap; z-index: 2; }
+.dock { padding-bottom: env(safe-area-inset-bottom); }
+.has-dock { padding-bottom: calc(5rem + env(safe-area-inset-bottom)); }
+@media (min-width: 1024px) { .has-dock { padding-bottom: 0; } }
+.combo-list { max-height: min(320px, 45vh); }
+
+/* ตารางผู้ดูแล */
+.table-roster td, .table-roster th { vertical-align: top; }
+.table-roster tr.group-start td { border-top: 2px solid var(--color-base-300); }
+.slot-badge { white-space: nowrap; }
+
+/* ---------- พิมพ์ / PDF ---------- */
+.print-only { display: none; }
+@media print {
+  @page { size: A4 landscape; margin: 12mm; }
+  body { background: #fff !important; color: #000 !important; font-size: 11pt; }
+  .no-print, dialog, #toasts, .progress-line, .dock { display: none !important; }
+  .print-only { display: block !important; }
+  .print-only h1 { font-size: 15pt; font-weight: 700; margin: 0 0 2pt; }
+  .print-only .sub { margin: 0 0 8pt; font-size: 10pt; }
+  .print-only table { width: 100%; border-collapse: collapse; font-size: 9.5pt; }
+  .print-only th, .print-only td { border: 1px solid #999; padding: 3pt 5pt; text-align: left; vertical-align: top; }
+  .print-only th { background: #eee; }
+  .print-only tr { page-break-inside: avoid; }
+  .print-only .foot { margin-top: 10pt; font-size: 9pt; color: #444; }
+  .print-only .sum-row { display: flex; gap: 16pt; margin: 6pt 0; }
+}

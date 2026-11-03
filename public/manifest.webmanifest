@@ -1,0 +1,17 @@
+{
+  "name": "ระบบจองเวรหน่วยเจาะเลือด",
+  "short_name": "จองเวร BRS",
+  "description": "ระบบจองเวรหน่วยเจาะเลือดเก็บสิ่งส่งตรวจและ POCT",
+  "lang": "th",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f2f2f2",
+  "theme_color": "#0082ce",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
+    { "src": "icons/icon.svg", "sizes": "any", "type": "image/svg+xml" }
+  ]
+}
