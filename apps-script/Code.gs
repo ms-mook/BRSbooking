@@ -477,7 +477,8 @@ function adminFetchHolidays_(a) {
   let cal = null;
   try { cal = CalendarApp.getCalendarById(CONFIG.TH_HOLIDAY_CAL); } catch (e) { cal = null; }
   if (!cal) throw appError_('เปิดปฏิทินวันหยุดไทยของ Google ไม่ได้ กรุณารัน setup() อีกครั้งเพื่ออนุญาตสิทธิ์ปฏิทิน', 'NOT_CONFIGURED');
-  const events = cal.getEvents(new Date(year, 0, 1), new Date(year + 1, 0, 1));
+  // ขอบเขตปีตามเวลาไทย (UTC+7) ไม่ขึ้นกับ timezone ของเครื่องที่รัน
+  const events = cal.getEvents(new Date(Date.UTC(year, 0, 1) - 7 * 3600000), new Date(Date.UTC(year + 1, 0, 1) - 7 * 3600000));
   const seen = {};
   const out = [];
   events.forEach(function (ev) {
