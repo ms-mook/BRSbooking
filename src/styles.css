@@ -56,6 +56,9 @@ body { font-family: var(--font-sans); -webkit-tap-highlight-color: transparent; 
 .icon-tile { display: inline-grid; place-items: center; flex: none; width: 2.5rem; height: 2.5rem; border-radius: .75rem; }
 .icon-tile svg { width: 1.25rem; height: 1.25rem; }
 .icon-tile-sm { width: 2rem; height: 2rem; border-radius: .6rem; }
+/* โลโก้ระบบ (ไฟล์เดียวกับ favicon) */
+.brand-logo { flex: none; width: 2.5rem; height: 2.5rem; border-radius: .55rem; box-shadow: 0 1px 2px rgb(18 48 63 / .25); }
+[data-theme="business"] .brand-logo { box-shadow: 0 0 0 1px rgb(255 255 255 / .14); }
 .icon-tile-sm svg { width: 1rem; height: 1rem; }
 .lucide { flex: none; }
 
