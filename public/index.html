@@ -59,69 +59,87 @@
 
     <!-- ===== Login ===== -->
     <section id="view-login" class="view login-stage" hidden>
-      <div class="login-wrap">
-        <aside class="login-day" aria-label="วันนี้และรอบการจอง">
-          <p class="login-unit">หน่วยเจาะเลือดเก็บสิ่งส่งตรวจและ POCT</p>
-          <h1 class="login-date"><span class="login-dow" id="login-dow"></span><span class="login-dm" id="login-dm"></span><span class="login-year" id="login-year"></span></h1>
-          <p class="login-round" id="login-round" data-tone="open"></p>
-        </aside>
-
-        <div class="login-panel" id="login-panel" data-mode="staff">
-          <div class="tube-rail" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i></div>
-
-          <div class="login-body" id="login-staff">
-            <h2 class="login-title">เข้าสู่ระบบจองเวร</h2>
-            <p class="login-sub">ค้นหาชื่อของคุณ แล้วกรอก PIN</p>
-
-            <div class="login-field">
-              <label class="login-label" for="staff-search">ชื่อ-นามสกุล</label>
-              <div class="relative" id="staff-combo">
-                <label class="input input-lg w-full login-input">
-                  <i data-lucide="search" class="w-5 h-5 text-primary"></i>
-                  <input id="staff-search" type="search" class="grow" autocomplete="off" placeholder="พิมพ์ชื่อหรือนามสกุล" aria-controls="staff-options">
-                </label>
-                <ul class="combo-list menu bg-base-100 rounded-box shadow-xl border border-base-300 absolute left-0 right-0 top-full mt-1 z-30 overflow-y-auto flex-nowrap w-full" id="staff-options" role="listbox" hidden></ul>
-              </div>
-              <div class="login-picked" id="staff-picked" hidden></div>
-            </div>
-
-            <div id="pin-login-block" class="login-field">
-              <label class="login-label" for="login-pin">PIN</label>
-              <div class="pin-field" id="pin-field">
-                <div class="pin-cells" aria-hidden="true"><span></span><span></span><span></span><span></span><span class="opt"></span><span class="opt"></span></div>
-                <input id="login-pin" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="current-password" aria-describedby="first-pin-hint">
-              </div>
-              <p class="login-hint" id="first-pin-hint">ครั้งแรก หรือหลังผู้ดูแลรีเซ็ต ใช้ PIN <b id="default-pin-text">1234</b> แล้วตั้ง PIN ใหม่ของคุณเอง</p>
-            </div>
-
-            <button class="btn btn-primary btn-lg btn-block" id="btn-login"><i data-lucide="log-in" class="w-5 h-5"></i>เข้าสู่ระบบ</button>
-            <p class="login-hint text-center" id="forgot-pin">ลืม PIN ติดต่อผู้ดูแลให้รีเซ็ต <span id="forgot-contact" class="whitespace-nowrap"></span></p>
-
-            <div class="login-foot">
-              <button class="btn btn-ghost btn-sm" id="btn-open-request"><i data-lucide="user-plus" class="w-4 h-4 text-primary"></i>ไม่พบชื่อ ขอเพิ่มรายชื่อ</button>
-              <button class="btn btn-ghost btn-sm" id="btn-open-admin"><i data-lucide="shield-check" class="w-4 h-4 text-secondary"></i>ผู้ดูแลระบบ</button>
+      <div class="login-split">
+        <aside class="login-hero" aria-label="ข้อมูลระบบ">
+          <div class="hero-brand">
+            <img class="hero-logo" src="icons/icon.svg" alt="" width="64" height="64">
+            <div>
+              <h1 class="hero-name">ระบบจองเวร</h1>
+              <p class="hero-unit">หน่วยเจาะเลือดเก็บสิ่งส่งตรวจและ POCT</p>
             </div>
           </div>
+          <div class="hero-mid">
+            <p class="hero-today" id="login-today"></p>
+            <p class="login-round" id="login-round" data-tone="open" hidden></p>
+            <div class="hero-notice" id="notice-login"></div>
+          </div>
+          <div class="hero-foot">
+            <button type="button" class="btn hero-guide" id="btn-open-guide-hero"><i data-lucide="book-open" class="w-5 h-5"></i>วิธีใช้งาน</button>
+            <p class="hero-org">งานห้องปฏิบัติการเวชศาสตร์ชันสูตร โรงพยาบาลศรีนครินทร์</p>
+          </div>
+          <div class="tube-rail" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i></div>
+        </aside>
 
-          <form class="login-body" id="admin-login-form" hidden>
-            <h2 class="login-title">เข้าสู่ระบบผู้ดูแล</h2>
-            <p class="login-sub">จัดการตารางเวร บุคลากร วันหยุด และรอบการจอง</p>
-            <div class="login-field">
-              <label class="login-label" for="adm-user">ชื่อผู้ใช้</label>
-              <label class="input input-lg w-full login-input"><i data-lucide="user-cog" class="w-5 h-5 text-primary"></i><input id="adm-user" class="grow" autocomplete="username" required></label>
+        <div class="login-side">
+          <div class="login-panel" id="login-panel" data-mode="staff">
+            <div class="login-body" id="login-staff">
+              <div>
+                <h2 class="login-title">เข้าสู่ระบบ</h2>
+                <p class="login-sub">ค้นหาชื่อของคุณ แล้วกรอก PIN</p>
+              </div>
+
+              <div class="login-field">
+                <label class="login-label" for="staff-search">ชื่อ-นามสกุล</label>
+                <div class="relative" id="staff-combo">
+                  <label class="input input-lg w-full login-input">
+                    <i data-lucide="search" class="w-5 h-5 text-primary"></i>
+                    <input id="staff-search" type="search" class="grow" autocomplete="off" placeholder="พิมพ์ชื่อหรือนามสกุล" aria-controls="staff-options">
+                  </label>
+                  <ul class="combo-list menu bg-base-100 rounded-box shadow-xl border border-base-300 absolute left-0 right-0 top-full mt-1 z-30 overflow-y-auto flex-nowrap w-full" id="staff-options" role="listbox" hidden></ul>
+                </div>
+                <div class="login-picked" id="staff-picked" hidden></div>
+              </div>
+
+              <div id="pin-login-block" class="login-field">
+                <label class="login-label" for="login-pin">PIN</label>
+                <div class="pin-field" id="pin-field">
+                  <div class="pin-cells" aria-hidden="true"><span></span><span></span><span></span><span></span><span class="opt"></span><span class="opt"></span></div>
+                  <input id="login-pin" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="current-password" aria-describedby="first-pin-hint">
+                </div>
+                <p class="login-hint" id="first-pin-hint">ครั้งแรก หรือหลังผู้ดูแลรีเซ็ต ใช้ PIN <b id="default-pin-text">1234</b> แล้วตั้ง PIN ใหม่ของคุณเอง</p>
+              </div>
+
+              <button class="btn btn-primary btn-lg btn-block" id="btn-login"><i data-lucide="log-in" class="w-5 h-5"></i>เข้าสู่ระบบ</button>
+              <p class="login-hint text-center" id="forgot-pin">ลืม PIN ติดต่อผู้ดูแลให้รีเซ็ต <span id="forgot-contact" class="whitespace-nowrap"></span></p>
+
+              <div class="login-foot">
+                <button class="btn btn-ghost btn-sm" id="btn-open-request"><i data-lucide="user-plus" class="w-4 h-4 text-primary"></i>ขอเพิ่มรายชื่อ</button>
+                <button class="btn btn-ghost btn-sm" id="btn-open-guide"><i data-lucide="book-open" class="w-4 h-4 text-success"></i>วิธีใช้งาน</button>
+                <button class="btn btn-ghost btn-sm" id="btn-open-admin"><i data-lucide="shield-check" class="w-4 h-4 text-secondary"></i>ผู้ดูแลระบบ</button>
+              </div>
             </div>
-            <div class="login-field">
-              <label class="login-label" for="adm-pass">รหัสผ่าน</label>
-              <label class="input input-lg w-full login-input"><i data-lucide="lock" class="w-5 h-5 text-warning"></i><input id="adm-pass" class="grow" type="password" autocomplete="current-password" required></label>
-            </div>
-            <button type="submit" class="btn btn-primary btn-lg btn-block"><i data-lucide="log-in" class="w-5 h-5"></i>เข้าสู่ระบบผู้ดูแล</button>
-            <div class="login-foot">
-              <button type="button" class="btn btn-ghost btn-sm" id="btn-admin-back"><i data-lucide="arrow-left" class="w-4 h-4 text-primary"></i>กลับไปหน้าบุคลากร</button>
-            </div>
-          </form>
+
+            <form class="login-body" id="admin-login-form" hidden>
+              <div>
+                <h2 class="login-title">เข้าสู่ระบบผู้ดูแล</h2>
+                <p class="login-sub">จัดการตารางเวร บุคลากร วันหยุด และรอบการจอง</p>
+              </div>
+              <div class="login-field">
+                <label class="login-label" for="adm-user">ชื่อผู้ใช้</label>
+                <label class="input input-lg w-full login-input"><i data-lucide="user-cog" class="w-5 h-5 text-primary"></i><input id="adm-user" class="grow" autocomplete="username" required></label>
+              </div>
+              <div class="login-field">
+                <label class="login-label" for="adm-pass">รหัสผ่าน</label>
+                <label class="input input-lg w-full login-input"><i data-lucide="lock" class="w-5 h-5 text-warning"></i><input id="adm-pass" class="grow" type="password" autocomplete="current-password" required></label>
+              </div>
+              <button type="submit" class="btn btn-primary btn-lg btn-block"><i data-lucide="log-in" class="w-5 h-5"></i>เข้าสู่ระบบผู้ดูแล</button>
+              <div class="login-foot">
+                <button type="button" class="btn btn-ghost btn-sm" id="btn-admin-back"><i data-lucide="arrow-left" class="w-4 h-4 text-primary"></i>กลับไปหน้าบุคลากร</button>
+              </div>
+            </form>
+          </div>
+          <div class="login-notice-m" id="notice-login-m"></div>
         </div>
-
-        <div class="login-notice" id="notice-login"></div>
       </div>
     </section>
 
@@ -134,7 +152,7 @@
           <div class="text-sm opacity-70 truncate" id="user-position"></div>
         </div>
         <div class="flex gap-2 lg:hidden">
-          <button class="btn btn-success btn-soft" id="btn-summary-m"><i data-lucide="list-checks" class="w-4 h-4"></i>สรุปเวร</button>
+          <button class="btn btn-ghost btn-square" id="btn-guide-m" aria-label="วิธีใช้งาน"><i data-lucide="book-open" class="w-5 h-5 text-success"></i></button><button class="btn btn-success btn-soft" id="btn-summary-m"><i data-lucide="list-checks" class="w-4 h-4"></i>สรุปเวร</button>
         </div>
       </div>
       <div class="grid gap-3 sm:grid-cols-3 mb-4" id="kpis"></div>
@@ -324,6 +342,20 @@
           </div>
         </div>
         <div class="mt-4"><button class="btn btn-primary" id="set-save"><i data-lucide="save" class="w-4 h-4"></i>บันทึกการตั้งค่า</button></div>
+        <div class="card bg-base-100 shadow-sm mt-6" id="archive-card">
+          <div class="card-body p-4 sm:p-6 gap-3">
+            <h2 class="card-title text-base"><i data-lucide="archive" class="w-5 h-5 text-info"></i>ล้างข้อมูลเก่า</h2>
+            <p class="text-sm opacity-80">ย้ายรายการจองและลาเวรที่เก่ากว่าวันที่เลือก ไปเก็บไว้ในแท็บ <b>Archive Booking</b> และ <b>Archive Leave</b> ของ Google Sheet หน้าเว็บจะไม่แสดงรายการเหล่านี้แล้ว แต่ข้อมูลไม่ถูกลบ ย้อนดูหรือคัดลอกกลับได้</p>
+            <div class="flex flex-wrap items-end gap-3">
+              <fieldset class="fieldset">
+                <legend class="fieldset-legend">ย้ายรายการที่เก่ากว่าวันที่</legend>
+                <input class="input" type="date" id="archive-before">
+              </fieldset>
+              <button class="btn btn-info btn-soft" id="archive-run" type="button"><i data-lucide="archive" class="w-4 h-4"></i>ย้ายข้อมูลเก่าไปเก็บ</button>
+            </div>
+            <p class="text-xs opacity-70">แนะนำทำทุก 2 เดือน ค่าเริ่มต้นคือวันที่ 1 ของเดือนก่อนหน้า (เก็บเดือนที่แล้วและเดือนนี้ไว้)</p>
+          </div>
+        </div>
       </div>
     </section>
 
@@ -398,6 +430,20 @@
     <form method="dialog" class="modal-backdrop"><button>close</button></form>
   </dialog>
 
+  <dialog id="dlg-guide" class="modal modal-bottom sm:modal-middle">
+    <div class="modal-box guide-box">
+      <h3 class="font-bold text-lg flex items-center gap-2"><span class="icon-tile icon-tile-sm bg-success/15 text-success"><i data-lucide="book-open"></i></span>วิธีใช้งาน</h3>
+      <ol class="guide-steps" id="guide-steps"></ol>
+      <p class="guide-home" id="guide-home"></p>
+      <p class="guide-forgot" id="guide-forgot"></p>
+      <div class="modal-actions-sticky">
+        <a class="btn btn-ghost" href="guide.png" download="BRS-guide.png" id="guide-download"><i data-lucide="image-down" class="w-4 h-4 text-info"></i>บันทึกเป็นภาพ</a>
+        <button type="button" class="btn btn-primary" data-close>เข้าใจแล้ว</button>
+      </div>
+    </div>
+    <form method="dialog" class="modal-backdrop"><button>close</button></form>
+  </dialog>
+
   <dialog id="dlg-pin" class="modal modal-bottom sm:modal-middle">
     <form method="dialog" class="modal-box" id="pin-form">
       <h3 class="font-bold text-lg flex items-center gap-2"><span class="icon-tile icon-tile-sm bg-warning/15 text-warning"><i data-lucide="key-round"></i></span>เปลี่ยน PIN</h3>
@@ -453,6 +499,7 @@
 
   <script src="vendor/lucide.min.js"></script>
   <script src="config.js"></script>
+  <script src="guide.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

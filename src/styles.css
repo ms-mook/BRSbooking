@@ -124,85 +124,115 @@ body[data-loading] .progress-line { opacity: 1; }
 @keyframes pop { from { opacity: 0; transform: scale(.92); } to { opacity: 1; transform: none; } }
 @keyframes slide-in-left { from { opacity: 0; transform: translateX(-24px); } to { opacity: 1; transform: none; } }
 @keyframes slide-in-right { from { opacity: 0; transform: translateX(24px); } to { opacity: 1; transform: none; } }
-/* ---------- หน้าเข้าสู่ระบบ ----------
-   สีแถบบนแผงคือสีจุกหลอดเก็บเลือดตามลำดับการเจาะ (order of draw):
+/* ---------- หน้าเข้าสู่ระบบ: แบ่งครึ่งจอ แผงสีกรมท่าซ้าย + ฟอร์มขวา ----------
+   แถบสีล่างแผงคือสีจุกหลอดเก็บเลือดตามลำดับการเจาะ (order of draw):
    ฟ้า (Citrate) → แดง (Clot) → ทอง (SST) → เขียว (Heparin) → ม่วง (EDTA) → เทา (NaF) */
 .login-stage {
-  --lg-bg: #ECF1F4; --lg-panel: #FFFFFF; --lg-ink: #12303F; --lg-muted: #587080; --lg-line: #D2DDE4;
+  --lg-bg: #F4F7F9; --lg-panel: #FFFFFF; --lg-ink: #12303F; --lg-muted: #587080; --lg-line: #D2DDE4;
+  --hero-bg: #12303F; --hero-ink: #F2F7FA; --hero-muted: #A9BFCB; --hero-line: rgb(255 255 255 / .14);
   --tube-1: #4E9BD4; --tube-2: #C73E37; --tube-3: #D3A21F; --tube-4: #2F9160; --tube-5: #8466BE; --tube-6: #87929A;
-  background: var(--lg-bg); color: var(--lg-ink);
-  min-height: calc(100dvh - 4rem);
+  background: var(--lg-bg); color: var(--lg-ink); min-height: calc(100dvh - 4rem);
 }
 [data-theme="business"] .login-stage {
   --lg-bg: #0F181E; --lg-panel: #16232B; --lg-ink: #E1EAEF; --lg-muted: #8EA2AE; --lg-line: #27363F;
+  --hero-bg: #0B2230; --hero-line: rgb(255 255 255 / .1);
 }
-.login-wrap {
-  display: grid; gap: 1.5rem; width: 100%; max-width: 72rem; margin: 0 auto;
-  padding: 1.25rem 1rem 2rem; min-height: calc(100dvh - 4rem); align-content: center;
-}
-@media (min-width: 1024px) {
-  .login-wrap {
-    grid-template-columns: minmax(0, 1fr) 27rem; grid-template-areas: ". panel" "day panel" "notice panel" ". panel"; grid-template-rows: 1fr auto auto 1fr;
-    column-gap: 4rem; row-gap: 0; padding: 3rem 2.5rem; align-items: start;
-  }
-  .login-day { grid-area: day; }
-  .login-panel { grid-area: panel; align-self: center; }
-  .login-notice { grid-area: notice; }
-}
-/* ฝั่งซ้าย: วันนี้ + รอบการจอง + ประกาศ */
-.login-unit { font-size: .95rem; color: var(--lg-muted); }
-.login-date { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: .6rem; margin-top: .25rem; line-height: 1.15; }
-.login-dow { font-size: 1.15rem; font-weight: 600; }
-.login-dm { font-size: 1.15rem; font-weight: 600; }
-.login-year { font-size: 1.15rem; color: var(--lg-muted); }
-@media (min-width: 1024px) {
-  .login-date { flex-direction: column; align-items: flex-start; margin-top: 1rem; }
-  .login-dow { font-size: 1.5rem; font-weight: 500; color: var(--lg-muted); }
-  .login-dm { font-size: clamp(3rem, 5.2vw, 4.75rem); font-weight: 700; letter-spacing: -.02em; line-height: 1.05; margin: .15rem 0 .1rem; }
-  .login-year { font-size: 1.5rem; }
-}
-.login-round {
-  display: flex; align-items: center; gap: .6rem; margin-top: .75rem; font-weight: 600; font-size: 1rem;
-}
-.login-round::before { content: ""; flex: none; width: .7rem; height: .7rem; border-radius: 50%; background: var(--tube-4); box-shadow: 0 0 0 4px color-mix(in oklab, var(--tube-4) 22%, transparent); }
-.login-round[data-tone="soon"]::before { background: var(--tube-3); box-shadow: 0 0 0 4px color-mix(in oklab, var(--tube-3) 25%, transparent); }
-.login-round[data-tone="closed"]::before { background: var(--tube-2); box-shadow: 0 0 0 4px color-mix(in oklab, var(--tube-2) 22%, transparent); }
-@media (min-width: 1024px) { .login-round { margin-top: 2rem; font-size: 1.1rem; } }
-.login-notice:not(:empty) { padding-left: 1rem; border-left: 3px solid var(--lg-line); max-width: 34rem; color: var(--lg-muted); font-size: .95rem; }
-@media (min-width: 1024px) { .login-notice:not(:empty) { margin-top: 1.5rem; font-size: 1rem; } }
-.login-contact { display: flex; align-items: center; gap: .4rem; margin-top: .5rem; color: var(--lg-ink); font-weight: 500; }
+/* หน้า login: โลโก้อยู่ในแผงแบรนด์แล้ว ซ่อนชื่อระบบบนแถบบนไม่ให้ซ้ำ */
+body.is-login .brand-top { visibility: hidden; }
+.login-split { display: grid; min-height: calc(100dvh - 4rem); }
+@media (min-width: 1024px) { .login-split { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } }
 
-/* แผงเข้าสู่ระบบ */
-.login-panel {
-  position: relative; background: var(--lg-panel); border: 1px solid var(--lg-line); border-radius: 1.25rem;
-  overflow: hidden; box-shadow: 0 1px 0 var(--lg-line), 0 24px 48px -28px rgb(18 48 63 / .35);
+/* แผงแบรนด์ */
+.login-hero {
+  position: relative; display: flex; flex-direction: column; gap: 1rem;
+  background: var(--hero-bg); color: var(--hero-ink); padding: 1.25rem 1.25rem 1.6rem;
+  background-image: radial-gradient(circle at 1px 1px, rgb(255 255 255 / .07) 1px, transparent 0); background-size: 24px 24px;
 }
-.tube-rail { display: grid; grid-template-columns: repeat(6, 1fr); height: .55rem; }
+.tube-rail { display: grid; grid-template-columns: repeat(6, 1fr); height: .45rem; }
 .tube-rail i:nth-child(1) { background: var(--tube-1); } .tube-rail i:nth-child(2) { background: var(--tube-2); }
 .tube-rail i:nth-child(3) { background: var(--tube-3); } .tube-rail i:nth-child(4) { background: var(--tube-4); }
 .tube-rail i:nth-child(5) { background: var(--tube-5); } .tube-rail i:nth-child(6) { background: var(--tube-6); }
-.login-panel[data-mode="admin"] .tube-rail i { background: var(--lg-ink); }
-.tube-rail i { transition: background-color .35s ease; }
-.login-body { display: flex; flex-direction: column; gap: 1.1rem; padding: 1.5rem 1.25rem 1.1rem; }
-@media (min-width: 640px) { .login-body { padding: 2rem 2rem 1.25rem; } }
+.login-hero .tube-rail { position: absolute; left: 0; right: 0; bottom: 0; }
+.hero-brand { display: flex; align-items: center; gap: .9rem; }
+.hero-logo { flex: none; width: 3.25rem; height: 3.25rem; border-radius: .85rem; box-shadow: 0 0 0 1px rgb(255 255 255 / .18); }
+.hero-name { font-size: 1.5rem; font-weight: 700; line-height: 1.2; }
+.hero-unit { color: var(--hero-muted); font-size: .95rem; line-height: 1.4; }
+.hero-mid { display: flex; flex-direction: column; align-items: flex-start; gap: .55rem; }
+.hero-today { color: var(--hero-muted); font-size: .95rem; }
+.hero-notice, .hero-foot { display: none; }
+.hero-org { color: var(--hero-muted); font-size: .85rem; }
+.hero-guide { background: transparent; color: var(--hero-ink); border: 1px solid rgb(255 255 255 / .35); }
+.hero-guide:hover { background: rgb(255 255 255 / .08); border-color: rgb(255 255 255 / .55); }
+@media (min-width: 1024px) {
+  .login-hero { justify-content: space-between; gap: 2rem; padding: clamp(2.5rem, 5vh, 4rem) clamp(2.5rem, 5vw, 6rem) clamp(2.75rem, 6vh, 4.5rem); }
+  .hero-logo { width: clamp(4rem, 5vw, 5.5rem); height: clamp(4rem, 5vw, 5.5rem); border-radius: 1.2rem; }
+  .hero-brand { gap: 1.25rem; }
+  .hero-name { font-size: clamp(2.25rem, 3.4vw, 3.75rem); letter-spacing: -.01em; }
+  .hero-unit { font-size: clamp(1.05rem, 1.25vw, 1.4rem); margin-top: .25rem; }
+  .hero-mid { gap: 1rem; max-width: 40rem; }
+  .hero-today { font-size: clamp(1.05rem, 1.2vw, 1.3rem); color: var(--hero-ink); font-weight: 500; }
+  .hero-notice:not(:empty) { display: block; color: var(--hero-muted); font-size: clamp(1rem, 1.05vw, 1.15rem); line-height: 1.75; padding-left: 1.1rem; border-left: 3px solid var(--hero-line); }
+  .hero-notice .login-contact { color: var(--hero-ink); }
+  .hero-foot { display: flex; flex-direction: column; align-items: flex-start; gap: 1rem; }
+  .login-hero .tube-rail { height: .6rem; }
+}
+.login-round {
+  display: inline-flex; align-items: center; gap: .5rem; padding: .3rem .85rem; border-radius: 999px;
+  font-size: .9rem; font-weight: 600; color: var(--hero-ink); background: rgb(47 145 96 / .28);
+}
+.login-round[hidden] { display: none; }
+.login-round[data-tone="soon"] { background: rgb(211 162 31 / .3); }
+.login-round[data-tone="closed"] { background: rgb(199 62 55 / .35); }
+.login-round::before { content: ""; flex: none; width: .55rem; height: .55rem; border-radius: 50%; background: #5FD39A; }
+.login-round[data-tone="soon"]::before { background: #F2C94C; }
+.login-round[data-tone="closed"]::before { background: #FF8A80; }
+.login-contact { display: flex; align-items: center; gap: .4rem; margin-top: .4rem; color: var(--lg-ink); font-weight: 500; }
+
+/* ฝั่งฟอร์ม */
+.login-side { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1.25rem; padding: 1.25rem 1rem 2rem; }
+.login-side > * { width: 100%; max-width: 30rem; }
+@media (min-width: 1024px) { .login-side { padding: 3rem clamp(2rem, 4vw, 5rem); } .login-side > * { max-width: clamp(28rem, 30vw, 36rem); } }
+.login-notice-m:not(:empty) { padding: .9rem 1rem; border-radius: .9rem; border: 1px dashed var(--lg-line); color: var(--lg-muted); font-size: .92rem; }
+@media (min-width: 1024px) { .login-notice-m { display: none; } }
+.login-panel { position: relative; background: var(--lg-panel); border: 1px solid var(--lg-line); border-radius: 1.25rem; box-shadow: 0 24px 48px -32px rgb(18 48 63 / .35); }
+@media (min-width: 1024px) { .login-panel { background: transparent; border: 0; box-shadow: none; border-radius: 0; } }
+.login-body { display: flex; flex-direction: column; gap: 1.1rem; padding: 1.4rem 1.25rem 1rem; }
+@media (min-width: 640px) { .login-body { padding: 1.75rem 2rem 1.1rem; } }
+@media (min-width: 1024px) { .login-body { padding: 0; gap: 1.35rem; } }
 .login-body[hidden] { display: none; }
 .login-title { font-size: 1.6rem; font-weight: 700; line-height: 1.2; }
-.login-sub { color: var(--lg-muted); margin-top: -.75rem; }
+@media (min-width: 1024px) { .login-title { font-size: clamp(2rem, 2.4vw, 2.75rem); } .login-sub { font-size: clamp(1rem, 1.1vw, 1.2rem); } }
+.login-sub { color: var(--lg-muted); margin-top: .25rem; }
 .login-field { display: flex; flex-direction: column; gap: .4rem; }
 .login-label { font-weight: 600; font-size: .95rem; }
-.login-input { background: transparent; }
+.login-input { background: var(--lg-panel); }
 .login-hint { font-size: .9rem; color: var(--lg-muted); }
 .login-hint b { color: var(--lg-ink); }
 .login-picked {
   display: flex; align-items: center; gap: .75rem; padding: .6rem .6rem .6rem .75rem;
-  border: 1px solid var(--lg-line); border-radius: var(--radius-field, .5rem); background: color-mix(in oklab, var(--color-primary) 6%, transparent);
+  border: 1px solid var(--lg-line); border-radius: var(--radius-field, .5rem); background: color-mix(in oklab, var(--color-primary) 6%, var(--lg-panel));
 }
 .login-picked[hidden] { display: none; }
 .login-avatar {
   flex: none; display: grid; place-items: center; width: 2.6rem; height: 2.6rem; border-radius: 50%;
   background: var(--color-primary); color: var(--color-primary-content); font-weight: 700; font-size: 1.15rem;
 }
-.login-foot { display: flex; flex-wrap: wrap; justify-content: space-between; gap: .25rem; padding-top: .9rem; border-top: 1px solid var(--lg-line); }
+.login-foot { display: flex; flex-wrap: wrap; justify-content: center; gap: .15rem .25rem; padding-top: .9rem; border-top: 1px solid var(--lg-line); }
+.login-panel[data-mode="admin"] .login-title::before { content: ""; display: block; width: 2.5rem; height: .3rem; border-radius: 999px; background: var(--lg-ink); margin-bottom: .9rem; }
+
+/* หน้าต่างวิธีใช้งาน */
+.guide-box { max-width: 36rem; }
+.guide-steps { display: grid; gap: .85rem; margin-top: 1rem; counter-reset: g; }
+.guide-steps li { display: grid; grid-template-columns: auto 1fr; gap: .85rem; align-items: start; counter-increment: g; }
+.guide-ic { position: relative; display: grid; place-items: center; width: 2.6rem; height: 2.6rem; border-radius: .8rem; color: #fff; background: var(--c, #12303F); }
+.guide-ic svg { width: 1.3rem; height: 1.3rem; }
+.guide-ic::after { content: counter(g); position: absolute; top: -.4rem; left: -.4rem; display: grid; place-items: center; width: 1.25rem; height: 1.25rem; border-radius: 50%; font-size: .75rem; font-weight: 700; background: var(--color-base-100); color: var(--color-base-content); box-shadow: 0 0 0 1.5px var(--c, #12303F); }
+.guide-steps b { display: block; font-size: 1.02rem; }
+.guide-steps p { font-size: .93rem; opacity: .8; line-height: 1.55; }
+.guide-home { display: flex; gap: .5rem; align-items: flex-start; margin-top: 1rem; padding: .75rem .9rem; border-radius: .8rem; background: color-mix(in oklab, var(--color-info) 9%, transparent); font-size: .93rem; }
+.guide-home + .guide-forgot { margin-top: .6rem; }
+.guide-forgot { display: flex; gap: .5rem; align-items: flex-start; margin-top: 1rem; padding: .75rem .9rem; border-radius: .8rem; background: color-mix(in oklab, var(--color-error) 8%, transparent); font-size: .93rem; }
+#dlg-guide { --tube-1: #4E9BD4; --tube-2: #C73E37; --tube-3: #D3A21F; --tube-4: #2F9160; --tube-5: #8466BE; --tube-6: #87929A; }
 
 /* ช่อง PIN: ช่องกรอกจริงซ้อนอยู่บนจุด 6 ช่อง จุดที่กรอกแล้วเป็นสีจุกหลอดตามลำดับ */
 .pin-field { position: relative; }
@@ -224,26 +254,6 @@ body[data-loading] .progress-line { opacity: 1; }
 .pin-field:focus-within .pin-cells span { border-color: color-mix(in oklab, var(--color-primary) 55%, var(--lg-line)); }
 .pin-field:focus-within .pin-cells span.on { border-color: currentColor; }
 .pin-field:focus-within { outline: 2px solid var(--color-primary); outline-offset: 4px; border-radius: .9rem; }
-
-/* จอ PC ใหญ่: ใช้พื้นที่เต็มขึ้น ขยายแผงและตัวอักษรตามความกว้างจอ (วางท้ายเพื่อชนะกฎก่อนหน้า) */
-@media (min-width: 1280px) {
-  .login-wrap {
-    max-width: none; padding: 3rem clamp(3rem, 6vw, 8rem);
-    grid-template-columns: minmax(0, 1fr) clamp(30rem, 33vw, 42rem); column-gap: clamp(3rem, 5vw, 7rem);
-  }
-  .login-unit { font-size: clamp(1.05rem, 1.1vw, 1.3rem); }
-  .login-dow, .login-year { font-size: clamp(1.6rem, 2vw, 2.6rem); }
-  .login-dm { font-size: clamp(5rem, 7.4vw, 10rem); }
-  .login-round { font-size: clamp(1.15rem, 1.45vw, 1.75rem); margin-top: 2.5rem; }
-  .login-round::before { width: .85rem; height: .85rem; }
-  .login-notice:not(:empty) { max-width: 50rem; font-size: clamp(1.05rem, 1.15vw, 1.35rem); margin-top: 2rem; }
-  .login-body { padding: 2.75rem 3rem 1.6rem; gap: 1.4rem; }
-  .login-title { font-size: clamp(1.8rem, 2.1vw, 2.5rem); }
-  .login-sub, .login-label { font-size: clamp(.95rem, 1vw, 1.15rem); }
-  .tube-rail { height: .75rem; }
-  .pin-cells { gap: .7rem; }
-  .pin-cells span { height: clamp(3.5rem, 4.2vw, 4.75rem); }
-}
 
 /* จังหวะเปิดหน้า: แถบสีหลอดค่อยๆ เติมจากซ้ายไปขวา ครั้งเดียว */
 @media (prefers-reduced-motion: no-preference) {

@@ -272,13 +272,14 @@
     const nav = $('side-nav'), foot = $('side-foot');
     if (view === 'user') {
       $('side-label').textContent = 'เมนูบุคลากร';
-      nav.innerHTML = sideItem('side-calendar', 'calendar-days', 'text-primary', 'ปฏิทินจองเวร') + sideItem('btn-summary', 'list-checks', 'text-success', 'สรุปเวรของฉัน') + sideItem('btn-change-pin', 'key-round', 'text-warning', 'เปลี่ยน PIN');
+      nav.innerHTML = sideItem('side-calendar', 'calendar-days', 'text-primary', 'ปฏิทินจองเวร') + sideItem('btn-summary', 'list-checks', 'text-success', 'สรุปเวรของฉัน') + sideItem('btn-change-pin', 'key-round', 'text-warning', 'เปลี่ยน PIN') + sideItem('btn-guide', 'book-open', 'text-success', 'วิธีใช้งาน');
       foot.innerHTML = '<div class="flex items-center gap-3 p-2 rounded-box bg-base-200/60">' + ic('circle-user-round', 'w-8 h-8 text-info') + '<div class="min-w-0 flex-1"><div class="font-semibold truncate">' + esc(S.user.firstName + ' ' + S.user.lastName) + '</div><div class="text-xs opacity-60 truncate">' + esc(POS_SHORT[S.user.position] || S.user.position) + '</div></div></div>' +
         '<button type="button" class="btn btn-ghost btn-block justify-start mt-2" id="btn-logout">' + ic('log-out', 'w-5 h-5 text-error') + 'ออกจากระบบ</button>';
       $('side-calendar').classList.add('active');
       $('side-calendar').onclick = () => window.scrollTo({ top: 0, behavior: 'smooth' });
       $('btn-summary').onclick = () => openSummary('month');
       $('btn-change-pin').onclick = openPinDialog;
+      $('btn-guide').onclick = openGuide;
       $('btn-logout').onclick = logout;
     } else if (view === 'admin') {
       $('side-label').textContent = 'เมนูผู้ดูแล';
@@ -295,6 +296,7 @@
     act.innerHTML = '';
     const shell = name === 'user' || name === 'admin';
     document.body.classList.toggle('has-sidebar', shell);
+    document.body.classList.toggle('is-login', name === 'login');
     if (shell) { renderSidebar(name); setPage(name === 'user' ? 'user' : S.admin.tab); }
     if (name === 'admin') act.innerHTML = '<span class="badge badge-secondary badge-soft gap-1 hidden sm:inline-flex">' + ic('shield-check', 'w-3.5 h-3.5') + 'ผู้ดูแลระบบ</span><button class="btn btn-ghost btn-sm" id="btn-admin-logout" aria-label="ออกจากระบบผู้ดูแล">' + ic('log-out', 'w-4 h-4 text-error') + '<span class="hidden sm:inline">ออกจากระบบ</span></button>';
     const alo = $('btn-admin-logout'); if (alo) alo.onclick = adminLogout;
@@ -309,7 +311,7 @@
       : '';
     $('forgot-contact').textContent = st.contact ? 'โทร ' + st.contact : '';
     $('default-pin-text').textContent = st.defaultPin || '1234';
-    $('notice-login').innerHTML = st.notice ? '<p>' + esc(st.notice) + '</p>' + (st.contact ? '<p class="login-contact">' + ic('phone', 'w-4 h-4 text-success') + 'ติดต่อ ' + esc(st.contact) + '</p>' : '') : '';
+    $('notice-login').innerHTML = $('notice-login-m').innerHTML = st.notice ? '<p>' + esc(st.notice) + '</p>' + (st.contact ? '<p class="login-contact">' + ic('phone', 'w-4 h-4 text-success') + 'ติดต่อ ' + esc(st.contact) + '</p>' : '') : '';
     renderLoginDay();
     $('notice-user').innerHTML = html;
   }
@@ -358,31 +360,41 @@
   }
 
   /* ---------------- login ---------------- */
+  // วันนี้ + สถานะรอบจอง (แสดงเฉพาะเมื่อมีเรื่องต้องบอก: ปิดรับ / เปิดเฉพาะบางเดือน / มีวันปิดรับ)
   function renderLoginDay() {
     const t = S.info.today, p = parts(t), st = S.info.settings;
-    $('login-dow').textContent = 'วัน' + DOW[dow(t)];
-    $('login-dm').textContent = p.d + ' ' + MONTHS[p.m - 1];
-    $('login-year').textContent = 'พ.ศ. ' + (p.y + 543);
+    $('login-today').textContent = 'วัน' + DOW[dow(t)] + 'ที่ ' + p.d + ' ' + MONTHS[p.m - 1] + ' ' + (p.y + 543);
     const r = $('login-round');
     const closed = !st.bookingOpen || (st.closeAt && t > st.closeAt);
-    let txt, tone = 'open';
+    let txt = '', tone = 'open';
     if (closed) { txt = 'ตอนนี้ปิดรับจองเวร'; tone = 'closed'; }
     else {
-      const months = st.bookingMonths.length ? 'เดือน' + st.bookingMonths.map(monthLabel).join(', ') : 'ทุกเดือนตั้งแต่วันนี้';
-      txt = 'เปิดรับจอง' + months;
+      if (st.bookingMonths.length) txt = 'เปิดรับจองเดือน' + st.bookingMonths.map(monthLabel).join(', ');
       if (st.closeAt) {
         const left = Math.round((Date.UTC(...st.closeAt.split('-').map((x, i) => i === 1 ? x - 1 : +x)) - Date.UTC(p.y, p.m - 1, p.d)) / 86400000);
-        txt += left === 0 ? ' ปิดรับวันนี้' : ' ปิดรับ ' + fmtDate(st.closeAt) + ' (อีก ' + left + ' วัน)';
+        txt += (txt ? ' ' : '') + (left === 0 ? 'ปิดรับวันนี้' : 'ปิดรับ ' + fmtDate(st.closeAt) + ' (อีก ' + left + ' วัน)');
         if (left <= 3) tone = 'soon';
       }
     }
     r.dataset.tone = tone;
     r.textContent = txt;
+    r.hidden = !txt;
   }
 
   function renderPinCells() {
     const n = $('login-pin').value.length;
     document.querySelectorAll('#pin-field .pin-cells span').forEach((c, i) => c.classList.toggle('on', i < n));
+  }
+
+  function openGuide() {
+    const g = window.BRS_GUIDE;
+    if (!$('guide-steps').childElementCount) {
+      $('guide-steps').innerHTML = g.steps.map((x) => '<li><span class="guide-ic" style="--c:var(--' + x.tone + ')">' + ic(x.icon) + '</span><div><b>' + esc(x.title) + '</b><p>' + esc(x.text) + '</p></div></li>').join('');
+    }
+    const c = S.info && S.info.settings && S.info.settings.contact;
+    $('guide-home').innerHTML = ic('smartphone', 'w-5 h-5 text-info') + '<span><b>' + esc(g.homeTitle) + '</b> ' + esc(g.home) + '</span>';
+    $('guide-forgot').innerHTML = ic('life-buoy', 'w-5 h-5 text-error') + '<span>' + esc(g.forgot) + (c ? ' โทร ' + esc(c) : '') + '</span>';
+    openDialog('dlg-guide');
   }
 
   function setLoginMode(mode, focus) {
@@ -1287,7 +1299,25 @@
     } catch (e) { toast(e.message, 'err'); }
   }
 
+  function archiveDefault() { return shiftMonth(S.info.today.slice(0, 7), -1) + '-01'; }
+
+  async function runArchive() {
+    const before = $('archive-before').value;
+    if (!before) { toast('กรุณาเลือกวันที่', 'warn'); return; }
+    try {
+      const c = await api('adminArchive', { token: S.admin.token, before: before, dryRun: true }, { btn: $('archive-run') });
+      if (!c.bookings && !c.leaves) { toast('ไม่มีรายการก่อนวันที่ ' + fmtDate(before) + ' ให้ย้าย', 'info'); return; }
+      const ok = await ask({ title: 'ย้ายข้อมูลเก่าไปเก็บ', text: 'ย้ายรายการก่อนวันที่ ' + fmtDate(before) + '\nการจอง ' + c.bookings + ' รายการ และลา/ยกเลิก ' + c.leaves + ' รายการ\nไปไว้ในแท็บ Archive ของ Google Sheet (ไม่ลบทิ้ง)', okText: 'ย้ายข้อมูล' });
+      if (!ok) return;
+      const r = await api('adminArchive', { token: S.admin.token, before: before }, { btn: $('archive-run') });
+      toast('ย้ายไปเก็บแล้ว: การจอง ' + r.bookings + ' รายการ ลา/ยกเลิก ' + r.leaves + ' รายการ', 'ok');
+      await loadAdminMonth();
+    } catch (e) { toast(e.message, 'err'); }
+  }
+
   function renderSettings() {
+    if (!$('archive-before').value) $('archive-before').value = archiveDefault();
+    $('archive-before').max = S.info.today;
     const st = S.admin.settings;
     $('set-open').checked = st.bookingOpen;
     $('set-holiday-rule').checked = st.holidayAsWeekend;
@@ -1474,7 +1504,11 @@
     $('login-pin').addEventListener('keydown', (e) => { if (e.key === 'Enter') doLogin(); });
     $('btn-open-request').onclick = () => openDialog('dlg-request');
     $('btn-open-admin').onclick = () => setLoginMode('admin');
+    $('btn-open-guide').onclick = openGuide;
+    $('btn-open-guide-hero').onclick = openGuide;
+    $('btn-guide-m').onclick = openGuide;
     $('btn-admin-back').onclick = () => setLoginMode('staff');
+    $('archive-run').onclick = runArchive;
     $('login-pin').addEventListener('input', () => { const el = $('login-pin'); const v = el.value.replace(/\D/g, '').slice(0, 6); if (v !== el.value) el.value = v; renderPinCells(); });
     $('request-form').addEventListener('submit', submitRequest);
     $('admin-login-form').addEventListener('submit', adminLoginSubmit);

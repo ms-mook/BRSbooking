@@ -550,3 +550,36 @@ test('[R28] ดึงวันหยุดจากปฏิทินวัน�
   const g2 = fresh();
   err(g2.call('adminFetchHolidays', { token: admin(g2), year: 2027 }), 'NOT_CONFIGURED');
 });
+
+test('[R32] ผู้ดูแลย้ายข้อมูลเก่าไปแท็บ Archive (ไม่ลบทิ้ง) นับก่อนย้าย และกันวันอนาคต', () => {
+  const gas = fresh();
+  const at = admin(gas);
+  const ut = loginAs(gas, 'สมชาย');
+  const b = ok(gas.call('getMyBookings', { token: ut, month: '2026-11' })).bookings.find((x) => x.date === '2026-11-02');
+  ok(gas.call('adminDeleteBooking', { token: at, id: b.id, asLeave: true, reason: 'ป่วย' }));
+  err(gas.call('adminArchive', { token: ut, before: '2026-11-04' }), 'SESSION');
+  err(gas.call('adminArchive', { token: at, before: '2026-12-01' }), 'BAD_REQUEST');
+  err(gas.call('adminArchive', { token: at, before: '4/11/2026' }), 'BAD_REQUEST');
+  const total = gas.values('Booking Data').length - 1;
+  const dry = ok(gas.call('adminArchive', { token: at, before: '2026-11-04', dryRun: true }));
+  assert.equal(dry.bookings, 2, 'ก่อน 4 พ.ย.: 15 ต.ค. และ 3 พ.ย.');
+  assert.equal(dry.leaves, 1);
+  assert.equal(gas.values('Booking Data').length - 1, total, 'dryRun ไม่ย้ายจริง');
+  assert.ok(!gas.sheets['Archive Booking']);
+  const r = ok(gas.call('adminArchive', { token: at, before: '2026-11-04' }));
+  assert.deepEqual([r.bookings, r.leaves], [2, 1]);
+  const left = gas.values('Booking Data').slice(1).filter((x) => x[1] !== '');
+  assert.equal(left.length, total - 2);
+  assert.ok(left.every((x) => String(x[1]) >= '2026-11-04'));
+  const arc = gas.values('Archive Booking');
+  assert.equal(arc[0][12], 'ID');
+  assert.deepEqual(arc.slice(1).map((x) => x[1]).sort(), ['2026-10-15', '2026-11-03']);
+  assert.equal(gas.values('Archive Leave').length - 1, 1);
+  assert.equal(ok(gas.call('adminGetMonth', { token: at, month: '2026-11' })).bookings.filter((x) => x.date < '2026-11-04').length, 0);
+  // ย้ายซ้ำ: ต่อท้าย ไม่ทับของเดิม
+  assert.deepEqual([ok(gas.call('adminArchive', { token: at, before: '2026-11-04' })).bookings], [0], 'ย้ายซ้ำวันเดิม: ไม่มีอะไรเหลือให้ย้าย');
+  gas.advance(2 * 86400000);
+  ok(gas.call('adminArchive', { token: admin(gas), before: '2026-11-06' }));
+  assert.equal(gas.values('Archive Booking').filter((x) => x[1] === '2026-11-05').length, 2);
+  assert.equal(gas.values('Archive Booking').length - 1, 4);
+});

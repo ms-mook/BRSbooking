@@ -20,7 +20,9 @@ const CONFIG = {
     LEAVE: 'Leave',
     STAFF: 'Staff',
     HOLIDAYS: 'Holidays',
-    SETTINGS: 'Settings'
+    SETTINGS: 'Settings',
+    ARCHIVE_BOOKING: 'Archive Booking',
+    ARCHIVE_LEAVE: 'Archive Leave'
   },
   // คอลัมน์ A–L ตรงกับระบบเดิม เพิ่มเฉพาะคอลัมน์ท้าย
   BOOKING_HEADERS: ['Timestamp', 'Date', 'ชื่อ', 'นามสกุล', 'ตำแหน่ง', 'Room', 'Station',
@@ -123,7 +125,8 @@ const API_ = {
   adminResetPin: adminResetPin_,
   adminSaveHolidays: adminSaveHolidays_,
   adminSaveSettings: adminSaveSettings_,
-  adminFetchHolidays: adminFetchHolidays_
+  adminFetchHolidays: adminFetchHolidays_,
+  adminArchive: adminArchive_
 };
 
 function doGet() {
@@ -443,6 +446,47 @@ function adminSaveHolidays_(a) {
     }
     return { count: rows.length, holidays: readHolidays_() };
   });
+}
+
+/**
+ * ย้ายข้อมูลเก่าไปเก็บ: รายการจอง/ลาที่วันที่ก่อน a.before ย้ายจาก Booking Data / Leave
+ * ไปต่อท้ายแท็บ Archive Booking / Archive Leave (ไม่ลบทิ้ง กู้คืนได้โดยคัดลอกกลับ)
+ * a.dryRun = true นับจำนวนอย่างเดียว ไม่ย้าย
+ */
+function adminArchive_(a) {
+  requireAdmin_(a.token);
+  const before = validDate_(a.before);
+  if (before > todayKey_()) throw appError_('เลือกได้ไม่เกินวันนี้ (กันการย้ายเวรที่ยังไม่ถึง)', 'BAD_REQUEST');
+  const run = function () {
+    const out = {};
+    [[CONFIG.SHEETS.BOOKING, CONFIG.SHEETS.ARCHIVE_BOOKING, CONFIG.BOOKING_HEADERS, 'bookings'],
+     [CONFIG.SHEETS.LEAVE, CONFIG.SHEETS.ARCHIVE_LEAVE, CONFIG.LEAVE_HEADERS, 'leaves']].forEach(function (t) {
+      const src = sheet_(t[0]);
+      const last = src.getLastRow();
+      const width = Math.max(src.getLastColumn(), t[2].length);
+      const rows = last > 1 ? src.getRange(2, 1, last - 1, width).getValues() : [];
+      const move = [], keep = [];
+      rows.forEach(function (r) {
+        const d = dateKey_(r[1]);
+        (d && d < before ? move : keep).push(r);
+      });
+      out[t[3]] = move.length;
+      if (a.dryRun || !move.length) return;
+      const ss = ss_();
+      let arc = ss.getSheetByName(t[1]);
+      if (!arc) { arc = ss.insertSheet(t[1]); arc.getRange(1, 1, 1, t[2].length).setValues([t[2]]); }
+      const start = Math.max(arc.getLastRow(), 1) + 1;
+      arc.getRange(start, 2, move.length, 1).setNumberFormat('@');
+      arc.getRange(start, 1, move.length, width).setValues(move.map(function (r) { const c = r.slice(); c[1] = dateKey_(r[1]); return c; }));
+      src.getRange(2, 1, last - 1, width).clearContent();
+      if (keep.length) src.getRange(2, 1, keep.length, width).setValues(keep);
+    });
+    return out;
+  };
+  const r = a.dryRun ? run() : withLock_(run);
+  r.before = before;
+  r.dryRun = !!a.dryRun;
+  return r;
 }
 
 /** ดึงวันหยุดจากปฏิทินวันหยุดไทยของ Google (ผู้ดูแลตรวจแล้วกดบันทึกเอง ไม่บันทึกอัตโนมัติ) */

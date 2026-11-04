@@ -89,6 +89,23 @@ await step('หน้าเข้าสู่ระบบโหลดได้ �
   await page.waitForFunction(() => document.querySelectorAll('svg.lucide').length > 10 && !document.querySelector('#view-login i[data-lucide]'));
 });
 
+await step('หน้า login แบ่งครึ่งจอ + ปุ่มวิธีใช้งาน (6 ขั้นตอน + ภาพดาวน์โหลดได้)', async () => {
+  assert.ok(await page.isVisible('.login-hero') && await page.isVisible('#login-panel'));
+  const box = await page.evaluate(() => [document.querySelector('.login-hero').getBoundingClientRect().width, innerWidth]);
+  assert.ok(Math.abs(box[0] - box[1] / 2) < 20, 'แผงแบรนด์กว้างครึ่งจอบน PC ' + box);
+  assert.ok(await page.isHidden('#login-round'), 'เปิดรับทุกเดือน: ไม่แสดงคำว่าเปิดรับจองทุกเดือน');
+  assert.doesNotMatch(await page.textContent('#view-login'), /ทุกเดือนตั้งแต่วันนี้/);
+  await page.click('#btn-open-guide-hero');
+  await page.waitForSelector('#dlg-guide[open]');
+  assert.equal(await page.locator('#guide-steps li').count(), 6);
+  assert.match(await page.textContent('#guide-home'), /Safari/);
+  const png = await page.request.get(BASE + '/guide.png');
+  assert.equal(png.status(), 200); assert.ok((await png.body()).length > 20000);
+  assert.equal(await page.getAttribute('#guide-download', 'href'), 'guide.png');
+  await page.click('#dlg-guide [data-close]');
+  await page.waitForFunction(() => !document.getElementById('dlg-guide').open);
+});
+
 await step('ไอคอนเว็บ: favicon.ico / SVG / ไอคอนแอปใน manifest โหลดได้ครบ', async () => {
   const man = await (await page.request.get(BASE + '/manifest.webmanifest')).json();
   const urls = ['favicon.ico', 'icons/icon.svg', 'icons/apple-touch-icon.png'].concat(man.icons.map((i) => i.src));
@@ -114,8 +131,8 @@ await step('เลือกชื่อ → เข้าด้วย PIN เร�
   await page.fill('#login-pin', '12a34');
   assert.equal(await page.inputValue('#login-pin'), '1234', 'รับเฉพาะตัวเลข');
   assert.equal(await page.locator('#pin-field .pin-cells span.on').count(), 4, 'จุด PIN แสดงตามจำนวนหลัก');
-  assert.match(await page.textContent('#login-round'), /เปิดรับจอง/);
-  assert.match(await page.textContent('#login-dm'), /4 พฤศจิกายน/);
+  assert.ok(await page.isHidden('#login-round'), 'เปิดรับทุกเดือน: ไม่ต้องแสดงป้ายรอบจอง');
+  assert.match(await page.textContent('#login-today'), /วันพุธที่ 4 พฤศจิกายน 2569/);
   await page.click('#btn-open-admin');
   assert.ok(await page.isVisible('#admin-login-form') && await page.isHidden('#login-staff'), 'สลับเป็นฟอร์มผู้ดูแลในแผงเดียวกัน');
   await page.click('#btn-admin-back');
@@ -526,6 +543,23 @@ await step('วันหยุด: เพิ่ม แก้ ลบ และบ
   await adm.selectOption('#hol-year', '2027');
   assert.equal(await adm.locator('#hol-table tbody tr').count(), 21);
   await adm.selectOption('#hol-year', '2026');
+});
+
+await step('ล้างข้อมูลเก่า: นับรายการก่อนย้าย แสดงยืนยัน และกดยกเลิกได้ (ข้อมูลไม่หาย)', async () => {
+  await adm.click('#side-nav [data-tab="settings"]');
+  assert.equal(await adm.inputValue('#archive-before'), '2026-10-01', 'ค่าเริ่มต้น: วันที่ 1 ของเดือนก่อนหน้า');
+  const sheetRows = async () => (await (await adm.request.get(BASE + '/__mock/sheet?name=' + encodeURIComponent('Booking Data'))).json()).filter((r) => r[1] !== '').length;
+  const before = await sheetRows();
+  await adm.fill('#archive-before', '2026-11-04');
+  await adm.click('#archive-run');
+  await adm.waitForSelector('#dlg-ask[open]');
+  assert.match(await adm.textContent('#ask-text'), /การจอง \d+ รายการ/);
+  await adm.click('#ask-cancel');
+  await adm.waitForTimeout(300);
+  assert.equal(await sheetRows(), before, 'กดยกเลิกแล้วข้อมูลยังอยู่ครบ');
+  await adm.fill('#archive-before', '2026-09-01');
+  await adm.click('#archive-run');
+  await expectToast(adm, /ไม่มีรายการก่อนวันที่/);
 });
 
 await step('ตั้งค่า: ปิดรอบเดือน พ.ย. (เปิดเฉพาะ ธ.ค.) และแก้ประกาศ', async () => {
