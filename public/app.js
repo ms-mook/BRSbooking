@@ -257,7 +257,7 @@
     roster: ['calendar-range', 'ตารางเวรรวม', 'ภาพรวมการจองของบุคลากรทั้งหมด'],
     staff: ['users', 'บุคลากร', 'อนุมัติคำขอ แก้ไขข้อมูล และรีเซ็ต PIN'],
     holidays: ['party-popper', 'วันหยุดราชการ', 'แก้ไขได้เมื่อมีประกาศเปลี่ยนแปลง'],
-    settings: ['settings', 'ตั้งค่าระบบ', 'รอบการจอง ประกาศ และความปลอดภัย']
+    settings: ['settings', 'ตั้งค่าระบบ', 'รอบการจอง ประกาศ และล้างข้อมูลเก่า']
   };
   function setPage(key) {
     const p = PAGES[key]; if (!p) return;
@@ -517,7 +517,7 @@
       const left = Math.round((Date.UTC(...st.closeAt.split('-').map((x, i) => i === 1 ? x - 1 : +x)) - Date.UTC(...S.info.today.split('-').map((x, i) => i === 1 ? x - 1 : +x))) / 86400000);
       roundVal = left === 0 ? 'ปิดรับวันนี้' : 'เหลืออีก ' + left + ' วัน';
       roundSub = 'ปิดรับจอง ' + esc(fmtDate(st.closeAt)); roundTone = left <= 3 ? 'bg-warning/15 text-warning' : 'bg-success/15 text-success';
-    } else { roundVal = 'เปิดรับจอง'; roundSub = st.bookingMonths.length ? 'เดือน ' + esc(st.bookingMonths.map(monthLabel).join(', ')) : 'ทุกเดือนตั้งแต่วันนี้'; roundTone = 'bg-success/15 text-success'; }
+    } else { roundVal = 'เปิดรับจอง'; roundSub = st.bookingMonths.length ? 'เดือน ' + esc(st.bookingMonths.map(monthLabel).join(', ')) : ''; roundTone = 'bg-success/15 text-success'; }
     $('kpis').innerHTML =
       kpi('calendar-clock', 'bg-primary/15 text-primary', 'เวรถัดไปของฉัน', next ? esc(fmtDate(next.date, true).replace('ที่ ', ' ')) : 'ยังไม่มีเวร', next ? esc(ROOM_SHORT(next.room) + ' · ' + next.slots.join(', ')) : 'เลือกวันบนปฏิทินเพื่อจอง', 'kpi-next') +
       kpi('list-checks', 'bg-info/15 text-info', 'เวรเดือน' + monthLabel(S.month).split(' ')[0], Object.keys(days).length + ' วัน · ' + slots + ' ช่วง', S.my.leaves.length ? 'ลา/ยกเลิก ' + S.my.leaves.length + ' รายการ' : '', 'kpi-month') +
@@ -1096,6 +1096,8 @@
   }
 
   function renderRoster() {
+    const nf = ['f-room', 'f-station', 'f-position', 'f-date', 'f-name', 'f-slot'].filter((id) => $(id).value.trim()).length + ($('f-conflict').checked ? 1 : 0) + (S.admin.range ? 1 : 0);
+    $('filter-count').hidden = !nf; $('filter-count').textContent = nf;
     $('adm-title').textContent = S.admin.range ? rangeLabel() : monthLabel(S.admin.month);
     const view = S.admin.view || 'list';
     $('pane-list').hidden = view !== 'list'; $('pane-grid').hidden = view !== 'grid'; $('pane-missing').hidden = view !== 'missing';
@@ -1541,6 +1543,8 @@
     $('adm-next').onclick = () => admMonth(1);
     ['f-room', 'f-station', 'f-position', 'f-date', 'f-conflict'].forEach((id) => $(id).addEventListener('change', renderRoster));
     $('f-name').addEventListener('input', renderRoster);
+    // ตัวกรองผู้ดูแล: เปิดค้างบนจอกว้าง พับเก็บบนมือถือ (กดแถบ "ตัวกรอง" เพื่อเปิด)
+    if (window.matchMedia && matchMedia('(min-width: 768px)').matches) $('adm-filters').open = true;
     $('adm-add').onclick = () => openBooking({ mode: 'admin', date: $('f-date').value || '' });
     $('adm-excel').onclick = exportExcel;
     $('adm-pdf').onclick = printRoster;

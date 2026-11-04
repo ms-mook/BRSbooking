@@ -864,6 +864,14 @@ for (const v of DEV) {
     await m.waitForSelector('#view-admin:not([hidden])');
     await noHScroll(m);
     if (m.viewportSize().width < 768) assert.ok(await m.locator('#adm-cards [data-aedit]').count() > 0, 'มือถือแสดงรายการเป็นการ์ด');
+    if (m.viewportSize().width < 768) {
+      assert.ok(!(await m.evaluate(() => document.getElementById('adm-filters').open)), 'มือถือ: ตัวกรองพับเก็บไว้ก่อน');
+      await m.click('#adm-filters > summary');
+      assert.ok(await m.isVisible('#f-room'), 'กดแล้วตัวกรองเปิด');
+      await m.selectOption('#f-room', { index: 1 });
+      assert.equal(await m.textContent('#filter-count'), '1', 'ป้ายนับตัวกรองที่ใช้อยู่');
+      await m.selectOption('#f-room', '');
+    }
     await m.waitForTimeout(400);
     await m.screenshot({ path: path.join(OUT, v.name + '-admin.png'), fullPage: true });
     await m.click('#btn-admin-logout');

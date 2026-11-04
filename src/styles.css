@@ -7,6 +7,31 @@
   themes: corporate --default, business;
 }
 
+/* ปรับโทนพื้นของธีมให้เข้าชุดกับหน้า login: สว่าง = เทาอมฟ้า, มืด = กรมท่า */
+@plugin "daisyui/theme" {
+  name: "corporate";
+  default: true;
+  --color-base-100: #FFFFFF;
+  --color-base-200: #EEF2F5;
+  --color-base-300: #D2DDE4;
+  --color-base-content: #12303F;
+  --color-neutral: #12303F;
+  --color-neutral-content: #F2F7FA;
+}
+@plugin "daisyui/theme" {
+  name: "business";
+  --color-base-100: #16232B;
+  --color-base-200: #0F181E;
+  --color-base-300: #27363F;
+  --color-base-content: #E1EAEF;
+  --color-neutral: #6F8896;
+  --color-neutral-content: #0F181E;
+  --color-primary: #2E86C9;
+  --color-primary-content: #FFFFFF;
+  --color-info: #4FA8DE;
+  --color-info-content: #0F181E;
+}
+
 /* ฟอนต์ Sarabun เก็บในเว็บเอง (ไม่ต้องโหลดจาก Google) */
 @font-face { font-family: "Sarabun"; font-style: normal; font-weight: 400; font-display: swap; src: url("fonts/sarabun-thai-400-normal.woff2") format("woff2"); unicode-range: U+02D7, U+0303, U+0331, U+0E01-0E5B, U+200C-200D, U+25CC; }
 @font-face { font-family: "Sarabun"; font-style: normal; font-weight: 400; font-display: swap; src: url("fonts/sarabun-latin-400-normal.woff2") format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
@@ -220,6 +245,18 @@ body.is-login .brand-top { visibility: hidden; }
 .login-foot { display: flex; flex-wrap: wrap; justify-content: center; gap: .15rem .25rem; padding-top: .9rem; border-top: 1px solid var(--lg-line); }
 .login-panel[data-mode="admin"] .login-title::before { content: ""; display: block; width: 2.5rem; height: .3rem; border-radius: 999px; background: var(--lg-ink); margin-bottom: .9rem; }
 
+/* ตัวกรองผู้ดูแล (พับได้บนมือถือ) */
+.filter-panel { border: 1px solid var(--color-base-300); border-radius: var(--radius-box, 1rem); }
+.filter-summary { display: flex; align-items: center; gap: .5rem; padding: .7rem 1rem; font-weight: 600; cursor: pointer; list-style: none; min-height: 2.75rem; }
+.filter-summary::-webkit-details-marker { display: none; }
+.filter-panel[open] .filter-chev { transform: rotate(180deg); }
+.filter-body { display: flex; flex-direction: column; gap: .5rem; padding: 0 .75rem .75rem; }
+@media (min-width: 768px) {
+  .filter-panel { border: 0; }
+  .filter-summary { display: none; }
+  .filter-body { padding: 0; }
+}
+
 /* หน้าต่างวิธีใช้งาน */
 .guide-box { max-width: 36rem; }
 .guide-steps { display: grid; gap: .85rem; margin-top: 1rem; counter-reset: g; }
@@ -263,8 +300,6 @@ body.is-login .brand-top { visibility: hidden; }
   .login-stage .tube-rail i:nth-child(6) { animation-delay: .30s; }
 }
 @keyframes tube-in { from { transform: scaleX(0); } to { transform: scaleX(1); } }
-.float-slow { animation: float 6s ease-in-out infinite; }
-@keyframes float { 50% { transform: translateY(-8px); } }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
 }

@@ -190,7 +190,7 @@
           <div class="card-body p-4 lg:p-5" id="day-panel"></div>
         </div>
       </div>
-      <div class="mt-4 notice-box" id="notice-user"></div>
+      <div class="mt-4" id="notice-user"></div>
 
       <div class="dock dock-md lg:hidden bg-base-100 border-t border-base-300 z-40" id="user-dock">
         <button id="dock-calendar" class="dock-active"><i data-lucide="calendar-days" class="text-primary"></i><span class="dock-label">ปฏิทิน</span></button>
@@ -224,6 +224,9 @@
                 <button class="btn btn-info btn-soft" id="adm-pdf"><i data-lucide="printer" class="w-4 h-4"></i>พิมพ์ / PDF</button>
               </div>
             </div>
+            <details class="filter-panel" id="adm-filters">
+              <summary class="filter-summary"><i data-lucide="sliders-horizontal" class="w-4 h-4 text-primary"></i>ตัวกรอง<span class="badge badge-primary badge-sm" id="filter-count" hidden></span><i data-lucide="chevron-down" class="w-4 h-4 ml-auto filter-chev"></i></summary>
+              <div class="filter-body">
             <div class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-2">
               <select class="select w-full" id="f-room" aria-label="กรองห้อง"><option value="">ทุกห้อง</option></select>
               <select class="select w-full" id="f-station" aria-label="กรองจุด"><option value="">ทุกจุด</option></select>
@@ -243,6 +246,10 @@
                 <button class="btn btn-primary btn-soft flex-1 sm:flex-none" id="f-range-apply" type="button"><i data-lucide="calendar-search" class="w-4 h-4"></i>ใช้ช่วงวันที่</button>
                 <button class="btn" id="f-range-clear" type="button" title="กลับไปดูรายเดือน" aria-label="กลับไปดูรายเดือน"><i data-lucide="x" class="w-4 h-4 text-error"></i></button>
               </div>
+            </div>
+              </div>
+            </details>
+            <div class="flex">
               <div class="join w-full sm:w-auto sm:ml-auto" id="roster-views" role="tablist">
                 <button class="btn join-item btn-active flex-1 sm:flex-none px-2 sm:px-4" data-view="list" type="button"><i data-lucide="list" class="w-4 h-4 text-primary"></i>รายการ</button>
                 <button class="btn join-item flex-1 sm:flex-none px-2 sm:px-4" data-view="grid" type="button"><i data-lucide="table" class="w-4 h-4 text-info"></i>ตารางเวร</button>
@@ -325,13 +332,13 @@
                 <p class="text-sm opacity-70 mb-2">หลังวันนี้ระบบปิดรับจองเองโดยไม่ต้องกดปิด และแสดงการนับถอยหลังให้บุคลากรเห็น (ว่าง = ไม่กำหนด)</p>
                 <div class="join w-full max-w-md"><input class="input join-item w-full" type="date" id="set-close-at" aria-label="วันสุดท้ายที่รับจอง"><button class="btn join-item" id="set-close-clear" type="button"><i data-lucide="x" class="w-4 h-4 text-error"></i>ล้าง</button></div>
               </div>
-              <label class="label cursor-pointer justify-start gap-3 whitespace-normal"><input type="checkbox" class="toggle toggle-error" id="set-block-holiday"><span class="text-base-content">วันหยุดนักขัตฤกษ์ปิดรับจอง <span class="opacity-70 text-sm block">บุคลากรกดจองวันหยุดไม่ได้ (ผู้ดูแลยังเพิ่มการจองให้ได้)</span></span></label>
+              <label class="label cursor-pointer justify-start gap-3 whitespace-normal"><input type="checkbox" class="toggle toggle-warning" id="set-block-holiday"><span class="text-base-content">วันหยุดนักขัตฤกษ์ปิดรับจอง <span class="opacity-70 text-sm block">บุคลากรกดจองวันหยุดไม่ได้ (ผู้ดูแลยังเพิ่มการจองให้ได้)</span></span></label>
               <label class="label cursor-pointer justify-start gap-3 whitespace-normal"><input type="checkbox" class="toggle toggle-warning" id="set-holiday-rule"><span class="text-base-content">วันหยุดราชการใช้ช่วงเวลาแบบเสาร์-อาทิตย์ (จองได้ 1 เวร)</span></label>
             </div>
           </div>
           <div class="card bg-base-100 shadow-sm">
             <div class="card-body p-4 sm:p-6 gap-3">
-              <h2 class="card-title text-base"><i data-lucide="shield-check" class="w-5 h-5 text-warning"></i>ความปลอดภัยและประกาศ</h2>
+              <h2 class="card-title text-base"><i data-lucide="megaphone" class="w-5 h-5 text-info"></i>ประกาศและการติดต่อ</h2>
               <fieldset class="fieldset">
                 <legend class="fieldset-legend"><i data-lucide="megaphone" class="w-4 h-4 text-info"></i>ข้อความประกาศ</legend>
                 <textarea class="textarea w-full" id="set-notice" rows="4"></textarea>
