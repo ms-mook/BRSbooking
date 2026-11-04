@@ -63,6 +63,7 @@
   function fmtShort(key) { const p = parts(key); return DOW_SHORT[dow(key)] + ' ' + p.d + '/' + p.m + '/' + String(p.y + 543).slice(2); }
   function holidayOf(key) { return (S.info.holidays || []).find((h) => h.date === key) || null; }
   function isWeekend(key) { const d = dow(key); return d === 0 || d === 6; }
+  function isBlockedHoliday(key) { return !!(S.info.settings.blockHolidays && holidayOf(key)); }
   function isSpecial(key) { return isWeekend(key) || (S.info.settings.holidayAsWeekend && !!holidayOf(key)); }
   function monthOpen(key) {
     const st = S.info.settings;
@@ -545,6 +546,7 @@
       if (wd === 6) cls.push('is-sat');
       if (wd === 0) cls.push('is-sun');
       if (hol) cls.push('is-holiday');
+      if (hol && S.info.settings.blockHolidays) cls.push('is-blocked');
       if (key < S.info.today) cls.push('is-past');
       if (key === S.info.today) cls.push('is-today');
       if (key === S.selected) cls.push('is-selected');
@@ -575,6 +577,7 @@
     else {
       if (key < S.info.today) { toast('ไม่สามารถจองย้อนหลังได้', 'warn'); return; }
       if (!monthOpen(key)) { toast('ปิดรับจองเวรของเดือนนี้แล้ว', 'warn'); return; }
+      if (isBlockedHoliday(key)) { toast('วันหยุดนักขัตฤกษ์ (' + holidayOf(key).name + ') ปิดรับจอง', 'warn'); return; }
       if (S.multi.length && isSpecial(S.multi[0]) !== isSpecial(key)) { toast('เลือกได้เฉพาะวันประเภทเดียวกัน (วันธรรมดา หรือ เสาร์-อาทิตย์/วันหยุด) เพราะช่วงเวลาต่างกัน', 'warn'); return; }
       if (S.multi.length >= 31) { toast('เลือกได้ไม่เกิน 31 วันต่อครั้ง', 'warn'); return; }
       S.multi.push(key); S.multi.sort();
@@ -611,7 +614,8 @@
     const mine = S.my.bookings.filter((b) => b.date === key);
     const left = S.my.leaves.filter((b) => b.date === key);
     let typeText;
-    if (special) typeText = (isWeekend(key) ? 'วันเสาร์-อาทิตย์' : 'วันหยุดราชการ') + ' — เลือกได้ 1 ช่วงเวลา และจองได้ 1 เวรต่อวัน';
+    if (isBlockedHoliday(key)) typeText = 'วันหยุดนักขัตฤกษ์ — ปิดรับจอง';
+    else if (special) typeText = (isWeekend(key) ? 'วันเสาร์-อาทิตย์' : 'วันหยุดราชการ') + ' — เลือกได้ 1 ช่วงเวลา และจองได้ 1 เวรต่อวัน';
     else typeText = (hol ? 'วันหยุดราชการ (ใช้ช่วงเวลาแบบวันธรรมดา)' : 'วันธรรมดา') + ' — เลือกได้หลายช่วงเวลา';
     let html = '<div class="motion-fade-up"><div class="flex items-start gap-3"><span class="icon-tile ' + (hol ? 'bg-holiday-soft text-holiday' : special ? 'bg-warning/15 text-warning' : 'bg-primary/15 text-primary') + '">' + ic(hol ? 'party-popper' : special ? 'sun' : 'calendar-days') + '</span><div><h3 class="font-bold text-lg leading-tight">' + esc(fmtDate(key, true)) + '</h3>' +
       (hol ? '<div class="text-holiday font-semibold text-sm">' + esc(hol.name) + '</div>' : '') + '<div class="text-sm opacity-70">' + esc(typeText) + '</div></div></div>';
@@ -621,7 +625,7 @@
       html += '<div class="bk rounded-box border border-base-300 bg-base-200/50 p-3 motion-fade-up" style="--i:' + i + '"><div class="flex items-start gap-2">' + ic('building-2', 'w-4 h-4 text-primary mt-1') + '<div class="flex-1 min-w-0"><div class="font-semibold">' + esc(b.room) + '</div><div class="text-sm opacity-70 flex items-center gap-1">' + ic('map-pin', 'w-3.5 h-3.5 text-error') + esc(b.station) + '</div></div></div>' +
         '<div class="flex flex-wrap gap-1 mt-2">' + slotBadges(b.slots) + '</div>' +
         (past ? '' : '<div class="flex justify-end gap-2 mt-2">' +
-          (open ? '<button class="btn btn-sm btn-ghost" data-edit="' + esc(b.id) + '">' + ic('pencil', 'w-4 h-4 text-info') + 'แก้ไข</button>' : '') +
+          (open && !isBlockedHoliday(key) ? '<button class="btn btn-sm btn-ghost" data-edit="' + esc(b.id) + '">' + ic('pencil', 'w-4 h-4 text-info') + 'แก้ไข</button>' : '') +
           '<button class="btn btn-sm ' + (open ? 'btn-ghost' : 'btn-error btn-soft') + '" data-cancel="' + esc(b.id) + '">' + ic(open ? 'trash-2' : 'calendar-x', 'w-4 h-4 text-error') + (open ? 'ยกเลิก' : 'แจ้งลาเวร') + '</button></div>') +
         '</div>';
     });
@@ -633,6 +637,7 @@
     }
     let reason = '';
     if (past) reason = 'ไม่สามารถจองย้อนหลังได้';
+    else if (isBlockedHoliday(key)) reason = 'วันหยุดนักขัตฤกษ์ ปิดรับจอง';
     else if (!open) reason = 'ปิดรับจองเวรของเดือนนี้แล้ว';
     else if (special && mine.length) reason = 'วันนี้คุณจองครบ 1 เวรแล้ว';
     html += '<button class="btn btn-primary btn-block mt-4" id="btn-book"' + (reason ? ' disabled' : '') + '>' + ic('calendar-plus', 'w-5 h-5') + 'จองเวรวันนี้</button>';
@@ -936,7 +941,8 @@
   }
 
   async function loadAdminMonth(noRender) {
-    const d = await api('adminGetMonth', { token: S.admin.token, month: S.admin.month });
+    const q = S.admin.range ? { token: S.admin.token, from: S.admin.range.from, to: S.admin.range.to } : { token: S.admin.token, month: S.admin.month };
+    const d = await api('adminGetMonth', q);
     S.admin.data = d;
     S.admin.staff = d.staff;
     S.admin.holidays = d.holidays.map((h) => ({ date: h.date, name: h.name }));
@@ -991,10 +997,12 @@
     const room = $('f-room').value, st = $('f-station').value, pos = $('f-position').value, date = $('f-date').value;
     const q = $('f-name').value.trim().toLowerCase();
     const onlyConflict = $('f-conflict').checked;
+    const slot = $('f-slot').value;
     const cf = S.admin.conflicts || {};
     return S.admin.data.bookings.filter((b) =>
       (!room || b.room === room) && (!st || b.station === st) && (!pos || b.position === pos) && (!date || b.date === date) &&
-      (!q || fullName(b).toLowerCase().indexOf(q) >= 0) && (!onlyConflict || cf[b.id]));
+      (!q || fullName(b).toLowerCase().indexOf(q) >= 0) && (!onlyConflict || cf[b.id]) &&
+      (slot === '' || b.slots.some((x) => String(SLOT_COL[x]) === slot)));
   }
 
   function rosterSort(list) {
@@ -1007,15 +1015,77 @@
     return '<span class="badge badge-lg badge-soft ' + color + ' gap-2 py-4">' + ic(icon, 'w-4 h-4') + esc(label) + ' <b>' + value + '</b></span>';
   }
 
+  function rangeLabel() {
+    const d = S.admin.data;
+    return S.admin.range ? fmtDate(d.from) + ' – ' + fmtDate(d.to) : 'เดือน' + monthLabel(S.admin.month);
+  }
+  function rangeDates() {
+    const out = []; const d = S.admin.data;
+    let t = Date.UTC(+d.from.slice(0, 4), +d.from.slice(5, 7) - 1, +d.from.slice(8));
+    const end = Date.UTC(+d.to.slice(0, 4), +d.to.slice(5, 7) - 1, +d.to.slice(8));
+    for (; t <= end; t += 86400000) out.push(new Date(t).toISOString().slice(0, 10));
+    return out;
+  }
+  /** บุคลากรที่ยังไม่มีการจองในช่วงที่เลือก (ใช้ตัวกรองตำแหน่ง/ชื่อ) */
+  function missingStaff() {
+    const pos = $('f-position').value, q = $('f-name').value.trim().toLowerCase();
+    const booked = {};
+    S.admin.data.bookings.forEach((b) => { booked[fullName(b)] = 1; });
+    return S.admin.staff.filter((s) => s.status === 'active' && !booked[s.firstName + ' ' + s.lastName] && (!pos || s.position === pos) && (!q || (s.firstName + ' ' + s.lastName).toLowerCase().indexOf(q) >= 0))
+      .sort((a, b) => (a.firstName + a.lastName).localeCompare(b.firstName + b.lastName, 'th'));
+  }
+  const STATION_SHORT = (st) => st.indexOf('ลงทะเบียน') >= 0 ? 'ลทบ.' : st.indexOf('อื่นๆ') >= 0 ? 'อื่นๆ' : '';
+  const COL_NAME = ['เช้า', 'สาย', 'บ่าย', 'เย็น', 'ดึก/ทั้งวัน'];
+  /** ข้อมูลตาราง: แถว = วันที่, คอลัมน์ = ห้อง × ช่วงเวลา (เฉพาะคอลัมน์ที่มีคนจอง) */
+  function gridModel(list) {
+    const cols = [];
+    S.info.rooms.forEach((r) => { for (let c = 0; c < 5; c++) if (list.some((b) => b.room === r.name && b.slots.some((x) => SLOT_COL[x] === c))) cols.push({ room: r.name, col: c }); });
+    const cell = {};
+    list.forEach((b) => b.slots.forEach((x) => {
+      const k = b.date + '|' + b.room + '|' + SLOT_COL[x];
+      (cell[k] = cell[k] || []).push(b.firstName + (STATION_SHORT(b.station) ? ' (' + STATION_SHORT(b.station) + ')' : ''));
+    }));
+    return { cols: cols, cell: cell, dates: rangeDates() };
+  }
+  function renderGrid(list) {
+    const g = gridModel(list);
+    let h = '<thead><tr><th class="bg-base-200">วันที่</th>' + g.cols.map((c) => '<td class="bg-base-200 font-semibold text-center">' + esc(ROOM_SHORT(c.room)) + '<div class="text-xs font-normal opacity-70">' + COL_NAME[c.col] + '</div></td>').join('') + '</tr></thead><tbody>';
+    if (!g.cols.length) h += '<tr><td class="text-center opacity-70 py-8">ไม่มีรายการตามตัวกรอง</td></tr>';
+    else g.dates.forEach((d) => {
+      const hol = holidayOf(d);
+      h += '<tr class="' + (hol ? 'hol' : isWeekend(d) ? 'wk' : '') + '"><th class="font-semibold">' + esc(fmtShort(d)) + (hol ? '<div class="text-xs text-holiday font-normal">' + esc(hol.name) + '</div>' : '') + '</th>' +
+        g.cols.map((c) => { const n = g.cell[d + '|' + c.room + '|' + c.col] || []; return '<td class="names">' + (n.length ? '<span class="cnt">' + n.length + '</span> ' + n.map(esc).join(', ') : '<span class="opacity-30">-</span>') + '</td>'; }).join('') + '</tr>';
+    });
+    $('adm-grid').innerHTML = h + '</tbody>';
+  }
+  function renderMissing() {
+    const miss = missingStaff();
+    let h = '<div role="alert" class="alert alert-soft alert-warning mb-3">' + ic('user-x', 'w-5 h-5') + '<span>บุคลากรที่ยังไม่มีการจองใน' + esc(rangeLabel()) + ' <b>' + miss.length + ' คน</b> (จากผู้ใช้งาน ' + S.admin.staff.filter((s) => s.status === 'active').length + ' คน)</span></div>';
+    h += '<div class="overflow-x-auto rounded-box border border-base-300"><table class="table table-sm min-w-[520px]" id="missing-table"><thead><tr><th>#</th><th>ชื่อ-นามสกุล</th><th>ตำแหน่ง</th><th>PIN</th></tr></thead><tbody>';
+    if (!miss.length) h += '<tr><td colspan="4" class="text-center opacity-70 py-6">ทุกคนจองแล้ว</td></tr>';
+    miss.forEach((s, i) => { h += '<tr class="hover"><td>' + (i + 1) + '</td><td class="font-semibold whitespace-nowrap">' + esc(s.firstName + ' ' + s.lastName) + '</td><td>' + esc(POS_SHORT[s.position] || s.position) + '</td><td>' + (s.hasPin ? '<span class="badge badge-success badge-soft badge-sm">ใช้งานแล้ว</span>' : '<span class="badge badge-ghost badge-sm">ยังไม่เคยเข้าระบบ</span>') + '</td></tr>'; });
+    $('pane-missing').innerHTML = h + '</tbody></table></div>';
+  }
+  function setRosterView(v) {
+    S.admin.view = v;
+    document.querySelectorAll('#roster-views [data-view]').forEach((b) => b.classList.toggle('btn-active', b.dataset.view === v));
+    renderRoster();
+  }
+
   function renderRoster() {
-    $('adm-title').textContent = monthLabel(S.admin.month);
+    $('adm-title').textContent = S.admin.range ? rangeLabel() : monthLabel(S.admin.month);
+    const view = S.admin.view || 'list';
+    $('pane-list').hidden = view !== 'list'; $('pane-grid').hidden = view !== 'grid'; $('pane-missing').hidden = view !== 'missing';
+    if (view === 'grid') renderGrid(rosterSort(filteredBookings()));
+    if (view === 'missing') renderMissing();
     const list = rosterSort(filteredBookings());
     const cf = S.admin.conflicts || {};
     const people = {}; let slots = 0; const byRoom = {};
     list.forEach((b) => { people[fullName(b)] = 1; slots += b.slots.length; byRoom[ROOM_SHORT(b.room)] = (byRoom[ROOM_SHORT(b.room)] || 0) + 1; });
     const nConf = Object.keys(cf).length;
     $('adm-stats').innerHTML = stat('clipboard-list', 'badge-primary', 'รายการ', list.length) + stat('clock', 'badge-info', 'ช่วงเวร', slots) + stat('users', 'badge-success', 'บุคลากร', Object.keys(people).length + ' คน') +
-      Object.keys(byRoom).map((r) => stat('building-2', 'badge-neutral', r, byRoom[r])).join('') + (nConf ? stat('triangle-alert', 'badge-error', 'ซ้ำซ้อน', nConf) : '');
+      Object.keys(byRoom).map((r) => stat('building-2', 'badge-neutral', r, byRoom[r])).join('') + (nConf ? stat('triangle-alert', 'badge-error', 'ซ้ำซ้อน', nConf) : '') +
+      stat('user-x', 'badge-warning', 'ยังไม่จอง', missingStaff().length + ' คน');
     const emptyMsg = 'ไม่มีรายการจองในเดือนนี้' + (list.length !== S.admin.data.bookings.length ? 'ตามตัวกรอง' : '');
     const btns = (b) => '<button class="btn btn-ghost btn-sm btn-square" title="แก้ไข" aria-label="แก้ไข" data-aedit="' + esc(b.id) + '">' + ic('pencil', 'w-4 h-4 text-info') + '</button><button class="btn btn-ghost btn-sm btn-square" title="ลบ/ลา" aria-label="ลบ/ลา" data-adel="' + esc(b.id) + '">' + ic('trash-2', 'w-4 h-4 text-error') + '</button>';
     let html = '<thead><tr><th>วันที่</th><th>ชื่อ-นามสกุล</th><th>ตำแหน่ง</th><th>ห้อง</th><th>จุดปฏิบัติงาน</th><th>ช่วงเวลา</th><th></th></tr></thead><tbody>';
@@ -1179,6 +1249,23 @@
     $('hol-table').querySelectorAll('[data-hdel]').forEach((el) => { el.onclick = () => { S.admin.holidays.splice(Number(el.dataset.hdel), 1); renderHolidays(); }; });
   }
 
+  async function fetchHolidays() {
+    const sel = $('hol-year').value;
+    const year = sel === 'all' ? Number(S.info.today.slice(0, 4)) + 1 : Number(sel);
+    try {
+      const r = await api('adminFetchHolidays', { token: S.admin.token, year: year }, { btn: $('hol-fetch') });
+      const have = {};
+      S.admin.holidays.forEach((h) => { have[h.date] = 1; });
+      const add = r.holidays.filter((h) => h.official && !have[h.date]);
+      const skipped = r.holidays.filter((h) => !h.official).length;
+      add.forEach((h) => S.admin.holidays.push({ date: h.date, name: h.name }));
+      S.admin.holidays.sort((a, b) => (a.date || '0').localeCompare(b.date || '0'));
+      $('hol-year').value = String(year);
+      renderHolidays();
+      toast('พบวันหยุด พ.ศ. ' + (year + 543) + ' เพิ่มใหม่ ' + add.length + ' วัน' + (skipped ? ' (ข้ามวันสำคัญที่ไม่ใช่วันหยุด ' + skipped + ' วัน)' : '') + ' — ตรวจแล้วกด "บันทึกวันหยุด"', add.length ? 'ok' : 'info');
+    } catch (e) { toast(e.message, 'err'); }
+  }
+
   async function saveHolidays() {
     const list = S.admin.holidays;
     if (list.some((h) => !h.date)) { toast('มีแถวที่ยังไม่ได้เลือกวันที่', 'warn'); return; }
@@ -1197,6 +1284,7 @@
     $('set-holiday-rule').checked = st.holidayAsWeekend;
     $('set-self-pin').checked = st.allowSelfPin;
     $('set-close-at').value = st.closeAt || '';
+    $('set-block-holiday').checked = st.blockHolidays;
     $('set-notice').value = st.notice;
     $('set-contact').value = st.contact;
     S.admin.months = st.bookingMonths.slice();
@@ -1218,7 +1306,7 @@
         settings: {
           BOOKING_OPEN: $('set-open').checked, BOOKING_MONTHS: S.admin.months.join(','),
           NOTICE: $('set-notice').value, CONTACT: $('set-contact').value,
-          SPECIAL_DAY_RULE: $('set-holiday-rule').checked, ALLOW_SELF_PIN: $('set-self-pin').checked, CLOSE_AT: $('set-close-at').value
+          SPECIAL_DAY_RULE: $('set-holiday-rule').checked, ALLOW_SELF_PIN: $('set-self-pin').checked, CLOSE_AT: $('set-close-at').value, BLOCK_HOLIDAYS: $('set-block-holiday').checked
         }
       }, { btn: $('set-save') });
       S.admin.settings = r.settings; S.info.settings = r.settings;
@@ -1287,12 +1375,21 @@
       S.admin.data.leaves.forEach((b) => rows4.push([fmtDate(b.date), fullName(b), b.position, b.room, b.station, b.slots.join(', '), b.type, b.reason, b.by, b.timestamp]));
       addSheet(X, wb, 'ลา-ยกเลิก', rows4, [16, 28, 34, 30, 30, 22, 14, 30, 18, 20]);
 
+      const g = gridModel(list);
+      const rows5 = [['วันที่', 'วัน', 'วันหยุด'].concat(g.cols.map((c) => ROOM_SHORT(c.room) + ' ' + COL_NAME[c.col]))];
+      g.dates.forEach((d) => { const hol = holidayOf(d); rows5.push([fmtDate(d), DOW[dow(d)], hol ? hol.name : ''].concat(g.cols.map((c) => (g.cell[d + '|' + c.room + '|' + c.col] || []).join(', ')))); });
+      addSheet(X, wb, 'ตารางเวร (ตาราง)', rows5, [16, 10, 18].concat(g.cols.map(() => 28)));
+
+      const rows6 = [['ชื่อ', 'นามสกุล', 'ตำแหน่ง', 'สถานะการเข้าระบบ']];
+      missingStaff().forEach((x) => rows6.push([x.firstName, x.lastName, x.position, x.hasPin ? 'ใช้งานแล้ว' : 'ยังไม่เคยเข้าระบบ']));
+      addSheet(X, wb, 'ยังไม่จอง', rows6, [16, 18, 40, 18]);
+
       const data = X.write(wb, { bookType: 'xlsx', type: 'array' });
       const blob = new Blob([data], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
       const a = document.createElement('a');
       a.href = URL.createObjectURL(blob);
       const [yy, mm] = S.admin.month.split('-');
-      a.download = 'BRS-roster-' + (Number(yy) + 543) + '-' + mm + '.xlsx'; // ชื่อไฟล์ภาษาอังกฤษ เพื่อให้ทุกเบราว์เซอร์ตั้งชื่อถูก
+      a.download = S.admin.range ? 'BRS-roster-' + S.admin.data.from + '_' + S.admin.data.to + '.xlsx' : 'BRS-roster-' + (Number(yy) + 543) + '-' + mm + '.xlsx'; // ชื่อไฟล์ภาษาอังกฤษ เพื่อให้ทุกเบราว์เซอร์ตั้งชื่อถูก
       document.body.appendChild(a);
       a.click();
       setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
@@ -1320,7 +1417,7 @@
     }));
     const roomIdx = (r) => S.info.rooms.findIndex((x) => x.name === r);
     groups.sort((a, b) => a.date.localeCompare(b.date) || roomIdx(a.room) - roomIdx(b.room) || a.station.localeCompare(b.station, 'th') || SLOT_COL[a.slot] - SLOT_COL[b.slot]);
-    let html = '<h1>ตารางเวร ' + esc(S.info.title) + '</h1><p class="sub">' + esc(S.info.org) + ' · เดือน' + esc(monthLabel(S.admin.month)) + ' · ' + list.length + ' รายการ</p>';
+    let html = '<h1>ตารางเวร ' + esc(S.info.title) + '</h1><p class="sub">' + esc(S.info.org) + ' · ' + esc(rangeLabel()) + ' · ' + list.length + ' รายการ</p>';
     html += '<table><thead><tr><th style="width:17%">วันที่</th><th style="width:16%">ห้อง</th><th style="width:17%">จุดปฏิบัติงาน</th><th style="width:11%">ช่วงเวลา</th><th>รายชื่อ</th></tr></thead><tbody>';
     if (!groups.length) html += '<tr><td colspan="5">ไม่มีรายการ</td></tr>';
     let last = '';
@@ -1397,7 +1494,7 @@
     $('booking-form').addEventListener('submit', submitBooking);
 
     $('admin-tabs').addEventListener('click', (e) => { const b = e.target.closest('[data-tab]'); if (b) switchTab(b.dataset.tab); });
-    const admMonth = async (delta) => { S.admin.month = shiftMonth(S.admin.month, delta); $('f-date').value = ''; try { await loadAdminMonth(); } catch (e) { toast(e.message, 'err'); } };
+    const admMonth = async (delta) => { S.admin.range = null; $('f-from').value = ''; $('f-to').value = ''; S.admin.month = shiftMonth(S.admin.month, delta); $('f-date').value = ''; try { await loadAdminMonth(); } catch (e) { toast(e.message, 'err'); } };
     $('adm-prev').onclick = () => admMonth(-1);
     $('adm-next').onclick = () => admMonth(1);
     ['f-room', 'f-station', 'f-position', 'f-date', 'f-conflict'].forEach((id) => $(id).addEventListener('change', renderRoster));
@@ -1417,6 +1514,17 @@
       const first = $('hol-table').querySelector('[data-hdate="0"]'); if (first) first.focus();
     };
     $('hol-save').onclick = saveHolidays;
+    $('hol-fetch').onclick = fetchHolidays;
+    $('f-slot').addEventListener('change', renderRoster);
+    $('roster-views').addEventListener('click', (e) => { const b = e.target.closest('[data-view]'); if (b) setRosterView(b.dataset.view); });
+    $('f-range-apply').onclick = async () => {
+      const f = $('f-from').value, t = $('f-to').value;
+      if (!f || !t) { toast('กรุณาเลือกวันที่เริ่มต้นและสิ้นสุด', 'warn'); return; }
+      if (t < f) { toast('วันที่สิ้นสุดต้องไม่ก่อนวันที่เริ่มต้น', 'warn'); return; }
+      const prev = S.admin.range; S.admin.range = { from: f, to: t };
+      try { await loadAdminMonth(); toast('แสดงข้อมูล ' + rangeLabel(), 'info'); } catch (e) { S.admin.range = prev; toast(e.message, 'err'); }
+    };
+    $('f-range-clear').onclick = async () => { $('f-from').value = ''; $('f-to').value = ''; if (!S.admin.range) return; S.admin.range = null; try { await loadAdminMonth(); } catch (e) { toast(e.message, 'err'); } };
     $('set-month-add').onclick = () => {
       const v = $('set-month-input').value;
       if (!/^\d{4}-\d{2}$/.test(v)) { toast('กรุณาเลือกเดือน', 'warn'); return; }

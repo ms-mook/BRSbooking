@@ -169,3 +169,13 @@ body[data-loading] .progress-line { opacity: 1; }
   .print-only .foot { margin-top: 10pt; font-size: 9pt; color: #444; }
   .print-only .sum-row { display: flex; gap: 16pt; margin: 6pt 0; }
 }
+
+/* ตารางเวรแบบตาราง (วันที่ × ห้อง × ช่วงเวลา) */
+.grid-table th, .grid-table td { white-space: nowrap; vertical-align: top; border-right: 1px solid var(--color-base-300); }
+.grid-table td.names { white-space: normal; min-width: 7.5rem; font-size: .8rem; line-height: 1.35; }
+.grid-table tr.wk td, .grid-table tr.wk th { background: color-mix(in oklab, var(--color-warning) 9%, var(--color-base-100)); }
+.grid-table tr.hol td, .grid-table tr.hol th { background: color-mix(in oklab, var(--holiday) 13%, var(--color-base-100)); }
+.grid-table .cnt { font-weight: 700; color: var(--color-primary); }
+.cal-day.is-blocked .num::after { content: "ปิดรับ"; font-size: .62rem; font-weight: 600; color: var(--holiday-ink); margin-left: auto; }
+.grid-table thead th:first-child, .grid-table tbody th { width: 1%; min-width: 7rem; }
+@media (max-width: 639px) { #roster-views .btn { font-size: .8rem; gap: .25rem; } }

@@ -131,9 +131,10 @@ test('จองวันธรรมดา: หลายช่วง, กัน�
 test('เสาร์-อาทิตย์และวันหยุดราชการ: 1 ช่วง 1 เวรต่อวัน และใช้ช่วงเวลาพิเศษ', () => {
   const gas = fresh();
   const t = loginAs(gas, 'ชูใจ');
+  ok(gas.call('adminSaveSettings', { token: admin(gas), settings: { BOOKING_OPEN: true, BLOCK_HOLIDAYS: false } }));
   // ค่าเริ่มต้น: วันหยุดราชการ (ไม่ใช่เสาร์-อาทิตย์) ใช้ช่วงวันธรรมดา เหมือนข้อมูลจริง 13/23 ต.ค.
   ok(gas.call('saveBooking', { token: t, date: '2026-12-10', room: 'ห้องเจาะเลือด SMC', station: 'จุดเจาะเลือด', slots: ['06:00-08:30', '08:30-12:30'] }));
-  ok(gas.call('adminSaveSettings', { token: admin(gas), settings: { BOOKING_OPEN: true, BOOKING_MONTHS: '', NOTICE: 'x', CONTACT: '1', SPECIAL_DAY_RULE: true } }));
+  ok(gas.call('adminSaveSettings', { token: admin(gas), settings: { BOOKING_OPEN: true, BOOKING_MONTHS: '', NOTICE: 'x', CONTACT: '1', SPECIAL_DAY_RULE: true, BLOCK_HOLIDAYS: false } }));
   const sat = { token: t, date: '2026-11-14', room: 'ห้องเจาะเลือดอาคารผู้ป่วยนอก OPD', station: 'จุดเจาะเลือด' };
   err(gas.call('saveBooking', Object.assign({ slots: ['06:00-11:00', '06:00-16:00'] }, sat)), 'RULE');
   err(gas.call('saveBooking', Object.assign({ slots: ['06:00-08:30'] }, sat)), 'BAD_REQUEST');
@@ -290,7 +291,7 @@ test('ผู้ดูแล: วันหยุดและการตั้ง
   assert.equal(gas.values('Holidays').length, 4, 'เขียนทับทั้งแท็บ ไม่เหลือแถวเก่า');
   assert.equal(typeof gas.values('Holidays')[1][0], 'string', 'วันที่เก็บเป็นข้อความ');
   const t = loginAs(gas, 'มานะ');
-  ok(gas.call('adminSaveSettings', { token: at, settings: { BOOKING_OPEN: true, SPECIAL_DAY_RULE: true } }));
+  ok(gas.call('adminSaveSettings', { token: at, settings: { BOOKING_OPEN: true, SPECIAL_DAY_RULE: true, BLOCK_HOLIDAYS: false } }));
   err(gas.call('saveBooking', { token: t, date: '2026-11-20', room: 'ห้องเจาะเลือด SMC', station: 'จุดเจาะเลือด', slots: ['06:00-08:30'] }), 'BAD_REQUEST');
   ok(gas.call('saveBooking', { token: t, date: '2026-11-20', room: 'ห้องเจาะเลือด SMC', station: 'จุดเจาะเลือด', slots: ['06:00-12:00'] }));
   ok(gas.call('saveBooking', { token: t, date: '2026-12-07', room: 'ห้องเจาะเลือด SMC', station: 'จุดเจาะเลือด', slots: ['06:00-08:30', '08:30-12:30'] }), 'ลบวันหยุด 7 ธ.ค. แล้ว กลับเป็นวันธรรมดา');
@@ -424,6 +425,7 @@ test('[R10] ชีต Staff รุ่นเก่า (9 คอลัมน์) �
 test('[R11] ข้อมูลรูปแบบจริง: วันหยุดที่มีการจองช่วงวันธรรมดาแล้วยังแก้ไข/ยกเลิกได้', () => {
   const gas = fresh();
   const at = admin(gas);
+  ok(gas.call('adminSaveSettings', { token: at, settings: { BOOKING_OPEN: true, BLOCK_HOLIDAYS: false } }));
   const sid = staffId(gas, 'ปิติ');
   const r = ok(gas.call('adminSaveBooking', { token: at, staffId: sid, date: '2026-12-10', room: 'ห้องเจาะเลือด SMC', station: 'จุดเจาะเลือด', slots: ['06:00-08:30'] }));
   const t = loginAs(gas, 'ปิติ');
@@ -472,4 +474,49 @@ test('[R19] วันปิดรับจองอัตโนมัติ (CLO
   err(gas.call('cancelBooking', { token: t, id: mine.id }), 'NEED_REASON');
   ok(gas.call('adminSaveSettings', { token: admin(gas), settings: { BOOKING_OPEN: true, CLOSE_AT: '' } }));
   ok(gas.call('saveBooking', { token: t2, date: '2026-12-03', room: 'ห้องเจาะเลือด SMC', station: 'จุดเจาะเลือด', slots: ['06:00-08:30'] }));
+});
+
+test('[R26] วันหยุดนักขัตฤกษ์ปิดรับจอง (ค่าเริ่มต้น) แต่ผู้ดูแลยังเพิ่มให้ได้', () => {
+  const gas = fresh();
+  assert.equal(ok(gas.call('getPublicInfo')).settings.blockHolidays, true);
+  const t = loginAs(gas, 'มานะ');
+  const b = { token: t, room: 'ห้องเจาะเลือด SMC', station: 'จุดเจาะเลือด', slots: ['06:00-08:30'] };
+  const e = err(gas.call('saveBooking', Object.assign({ date: '2026-12-07' }, b)), 'HOLIDAY');
+  assert.match(e.error, /ชดเชยวันพ่อแห่งชาติ/);
+  const bulk = ok(gas.call('saveBookings', Object.assign({ dates: ['2026-12-07', '2026-12-08'] }, b)));
+  assert.deepEqual(bulk.results.map((x) => x.code || 'OK'), ['HOLIDAY', 'OK']);
+  const at = admin(gas);
+  ok(gas.call('adminSaveBooking', { token: at, staffId: staffId(gas, 'มานะ'), date: '2026-12-10', room: 'ห้องเจาะเลือด SMC', station: 'จุดเจาะเลือด', slots: ['06:00-08:30'] }), 'ผู้ดูแลเพิ่มได้');
+  ok(gas.call('adminSaveSettings', { token: at, settings: { BOOKING_OPEN: true, BLOCK_HOLIDAYS: false } }));
+  ok(gas.call('saveBooking', Object.assign({ date: '2026-12-07' }, b)), 'ปิดการบล็อกแล้วจองได้');
+});
+
+test('[R27] ผู้ดูแลดูข้อมูลตามช่วงวันที่ (ข้ามเดือนได้)', () => {
+  const gas = fresh();
+  const at = admin(gas);
+  const r = ok(gas.call('adminGetMonth', { token: at, from: '2026-10-01', to: '2026-11-05' }));
+  assert.equal(r.from, '2026-10-01'); assert.equal(r.to, '2026-11-05');
+  assert.deepEqual(r.bookings.map((b) => b.date), ['2026-10-15', '2026-11-02', '2026-11-03', '2026-11-05', '2026-11-05']);
+  err(gas.call('adminGetMonth', { token: at, from: '2026-11-05', to: '2026-11-01' }), 'BAD_REQUEST');
+  err(gas.call('adminGetMonth', { token: at, from: '2026-01-01', to: '2027-06-01' }), 'BAD_REQUEST');
+  err(gas.call('adminGetMonth', { token: at, from: 'x', to: '2026-11-01' }), 'BAD_REQUEST');
+});
+
+test('[R28] ดึงวันหยุดจากปฏิทินวันหยุดไทยของ Google (แยกวันหยุดจริงกับวันสำคัญ)', () => {
+  const ev = [
+    { date: '2027-01-01', title: 'วันขึ้นปีใหม่', desc: 'วันหยุดนักขัตฤกษ์' },
+    { date: '2027-01-09', title: 'วันเด็กแห่งชาติ', desc: 'การเฉลิมฉลอง' },
+    { date: '2027-02-14', title: 'วันวาเลนไทน์', desc: 'Observance' },
+    { date: '2027-04-13', title: 'วันสงกรานต์', desc: 'Public holiday' },
+    { date: '2026-12-31', title: 'วันสิ้นปี', desc: 'วันหยุดนักขัตฤกษ์' }
+  ];
+  const gas = createGas({ now: NOW, props: { ADMIN_USER: 'admin', ADMIN_PASS: 'secret-pass' }, calendarEvents: ev, sheets: { 'Booking Data': bookingRows(), Leave: [LEAVE_HEADER] } });
+  const at = admin(gas);
+  const r = ok(gas.call('adminFetchHolidays', { token: at, year: 2027 }));
+  assert.deepEqual(r.holidays.map((h) => [h.date, h.official]), [['2027-01-01', true], ['2027-01-09', false], ['2027-02-14', false], ['2027-04-13', true]]);
+  err(gas.call('adminFetchHolidays', { token: at, year: 1999 }), 'BAD_REQUEST');
+  err(gas.call('adminFetchHolidays', { year: 2027 }), 'SESSION');
+  err(fresh().call('adminFetchHolidays', { token: admin(fresh()), year: 2027 }), 'SESSION');
+  const g2 = fresh();
+  err(g2.call('adminFetchHolidays', { token: admin(g2), year: 2027 }), 'NOT_CONFIGURED');
 });

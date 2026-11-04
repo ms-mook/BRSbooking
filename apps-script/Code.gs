@@ -12,6 +12,7 @@
 
 const CONFIG = {
   TZ: 'Asia/Bangkok',
+  TH_HOLIDAY_CAL: 'th.th#holiday@group.v.calendar.google.com',
   APP_TITLE: 'ระบบจองเวรหน่วยเจาะเลือดเก็บสิ่งส่งตรวจและPOCT',
   ORG: 'งานห้องปฏิบัติการเวชศาสตร์ชันสูตร โรงพยาบาลศรีนครินทร์',
   SHEETS: {
@@ -63,6 +64,7 @@ const CONFIG = {
     ['BOOKING_MONTHS', '', 'เดือนที่เปิดให้จอง รูปแบบ yyyy-MM คั่นด้วย , (ว่าง = ทุกเดือนตั้งแต่วันนี้)'],
     ['NOTICE', 'บุคลากรทุกท่านจองเวลาปฏิบัติงานผ่านเอกสารอิเล็กทรอนิกส์ ส่งภายในวันที่ 26 ของทุกเดือน (หรือจนกว่าจะปิดรับ) เพื่อให้หัวหน้าหน่วยฯหรือผู้รับผิดชอบจัดทำตารางเวรให้เรียบร้อยและจัดสรรจุดปฏิบัติงานได้ทันเวลา', 'ข้อความประกาศท้ายหน้าเว็บ'],
     ['CONTACT', '63662/67204', 'เบอร์ติดต่อ'],
+    ['BLOCK_HOLIDAYS', 'TRUE', 'วันหยุดนักขัตฤกษ์ปิดรับจอง (TRUE/FALSE) — ผู้ดูแลยังเพิ่มการจองให้ได้'],
     ['SPECIAL_DAY_RULE', 'FALSE', 'วันหยุดราชการใช้ช่วงเวลาแบบวันเสาร์-อาทิตย์ (TRUE/FALSE) — ข้อมูลเดิมจองแบบวันธรรมดา จึงปิดไว้'],
     ['CLOSE_AT', '', 'วันสุดท้ายที่รับจอง (yyyy-MM-dd) หลังวันนี้ปิดรับอัตโนมัติ (ว่าง = ไม่กำหนด)'],
     ['ALLOW_SELF_PIN', 'TRUE', 'ให้บุคลากรตั้ง PIN ครั้งแรกเอง (TRUE/FALSE) — ปิดเมื่อทุกคนตั้ง PIN แล้ว เพื่อกันคนอื่นตั้ง PIN แทน']
@@ -120,7 +122,8 @@ const API_ = {
   adminSaveStaff: adminSaveStaff_,
   adminResetPin: adminResetPin_,
   adminSaveHolidays: adminSaveHolidays_,
-  adminSaveSettings: adminSaveSettings_
+  adminSaveSettings: adminSaveSettings_,
+  adminFetchHolidays: adminFetchHolidays_
 };
 
 function doGet() {
@@ -157,6 +160,7 @@ function setup() {
   Logger.log('พร้อมใช้งาน: ' + ss.getName());
   Logger.log('ADMIN_USER ตั้งแล้ว: ' + (prop_('ADMIN_USER') ? 'ใช่' : 'ยังไม่ตั้ง'));
   Logger.log('ADMIN_PASS ตั้งแล้ว: ' + (prop_('ADMIN_PASS') ? 'ใช่' : 'ยังไม่ตั้ง'));
+  try { Logger.log('ปฏิทินวันหยุดไทย: ' + (CalendarApp.getCalendarById(CONFIG.TH_HOLIDAY_CAL) ? 'พร้อมใช้' : 'ไม่พบ')); } catch (e) { Logger.log('ปฏิทินวันหยุดไทย: ยังไม่ได้อนุญาตสิทธิ์'); }
 }
 
 /* =========================== Public / user API =========================== */
@@ -264,7 +268,7 @@ function getMyBookings_(a) {
 
 function saveBooking_(a) {
   const staff = requireUser_(a.token);
-  const input = validBookingInput_(a);
+  const input = validBookingInput_(a, false);
   const settings = readSettings_();
   checkUserCanChange_(input.date, settings, 'จอง');
   return withLock_(function () {
@@ -296,7 +300,7 @@ function saveBookings_(a) {
     const results = [];
     dates.forEach(function (date) {
       try {
-        const input = validBookingInput_({ date: date, room: a.room, station: a.station, slots: a.slots });
+        const input = validBookingInput_({ date: date, room: a.room, station: a.station, slots: a.slots }, false);
         checkUserCanChange_(date, settings, 'จอง');
         checkDuplicate_(all, staff.key, input, null, settings);
         const row = bookingRow_(input, staff, newId_('B'));
@@ -350,7 +354,7 @@ function adminLogin_(a) {
 
 function adminGetMonth_(a) {
   requireAdmin_(a.token);
-  const range = monthRange_(a.month);
+  const range = a.from || a.to ? dateRange_(a.from, a.to) : monthRange_(a.month);
   const inRange = function (b) { return b.date >= range.from && b.date <= range.to; };
   return {
     from: range.from,
@@ -365,7 +369,7 @@ function adminGetMonth_(a) {
 
 function adminSaveBooking_(a) {
   requireAdmin_(a.token);
-  const input = validBookingInput_(a);
+  const input = validBookingInput_(a, true);
   const settings = readSettings_();
   return withLock_(function () {
     const staff = findStaff_(str_(a.staffId));
@@ -465,6 +469,30 @@ function adminSaveHolidays_(a) {
   });
 }
 
+/** ดึงวันหยุดจากปฏิทินวันหยุดไทยของ Google (ผู้ดูแลตรวจแล้วกดบันทึกเอง ไม่บันทึกอัตโนมัติ) */
+function adminFetchHolidays_(a) {
+  requireAdmin_(a.token);
+  const year = Number(a.year);
+  if (!(year >= 2020 && year <= 2100)) throw appError_('ปีไม่ถูกต้อง', 'BAD_REQUEST');
+  let cal = null;
+  try { cal = CalendarApp.getCalendarById(CONFIG.TH_HOLIDAY_CAL); } catch (e) { cal = null; }
+  if (!cal) throw appError_('เปิดปฏิทินวันหยุดไทยของ Google ไม่ได้ กรุณารัน setup() อีกครั้งเพื่ออนุญาตสิทธิ์ปฏิทิน', 'NOT_CONFIGURED');
+  const events = cal.getEvents(new Date(year, 0, 1), new Date(year + 1, 0, 1));
+  const seen = {};
+  const out = [];
+  events.forEach(function (ev) {
+    const date = Utilities.formatDate(ev.getStartTime(), CONFIG.TZ, 'yyyy-MM-dd');
+    const desc = String(ev.getDescription() || '');
+    const official = !/observance|การเฉลิมฉลอง|วันสำคัญ/i.test(desc);
+    const name = cleanText_(ev.getTitle(), 120);
+    if (seen[date + name]) return;
+    seen[date + name] = true;
+    out.push({ date: date, name: name, official: official });
+  });
+  out.sort(function (x, y) { return x.date < y.date ? -1 : 1; });
+  return { year: year, holidays: out };
+}
+
 function adminSaveSettings_(a) {
   requireAdmin_(a.token);
   const s = a.settings || {};
@@ -476,6 +504,7 @@ function adminSaveSettings_(a) {
     NOTICE: safeCell_(cleanText_(s.NOTICE, 1000)),
     CONTACT: safeCell_(cleanText_(s.CONTACT, 100)),
     SPECIAL_DAY_RULE: s.SPECIAL_DAY_RULE === true || s.SPECIAL_DAY_RULE === 'TRUE' ? 'TRUE' : 'FALSE',
+    BLOCK_HOLIDAYS: s.BLOCK_HOLIDAYS === false || s.BLOCK_HOLIDAYS === 'FALSE' ? 'FALSE' : 'TRUE',
     CLOSE_AT: s.CLOSE_AT ? validDate_(s.CLOSE_AT) : '',
     ALLOW_SELF_PIN: s.ALLOW_SELF_PIN === false || s.ALLOW_SELF_PIN === 'FALSE' ? 'FALSE' : 'TRUE'
   };
@@ -495,8 +524,13 @@ function adminSaveSettings_(a) {
 
 /* =========================== Booking rules =========================== */
 
-function validBookingInput_(a) {
+function validBookingInput_(a, isAdmin) {
   const date = validDate_(a.date);
+  if (!isAdmin) {
+    const st = readSettings_();
+    const hol = st.BLOCK_HOLIDAYS === 'TRUE' && readHolidays_().filter(function (h) { return h.date === date; })[0];
+    if (hol) throw appError_('วันที่ ' + date + ' เป็นวันหยุดนักขัตฤกษ์ (' + hol.name + ') ปิดรับจอง', 'HOLIDAY');
+  }
   const room = CONFIG.ROOMS.filter(function (r) { return r.name === a.room; })[0];
   if (!room) throw appError_('กรุณาเลือกห้อง', 'BAD_REQUEST');
   if (room.stations.indexOf(a.station) < 0) throw appError_('กรุณาเลือกจุดปฏิบัติงาน', 'BAD_REQUEST');
@@ -790,6 +824,7 @@ function readSettings_() {
   }
   s.BOOKING_OPEN = String(s.BOOKING_OPEN).toUpperCase() === 'TRUE' ? 'TRUE' : 'FALSE';
   s.SPECIAL_DAY_RULE = String(s.SPECIAL_DAY_RULE).toUpperCase() === 'TRUE' ? 'TRUE' : 'FALSE';
+  s.BLOCK_HOLIDAYS = String(s.BLOCK_HOLIDAYS).toUpperCase() === 'FALSE' ? 'FALSE' : 'TRUE';
   s.ALLOW_SELF_PIN = String(s.ALLOW_SELF_PIN).toUpperCase() === 'FALSE' ? 'FALSE' : 'TRUE';
   s.CLOSE_AT = dateKey_(s.CLOSE_AT) || '';
   return s;
@@ -802,6 +837,7 @@ function publicSettings_(s) {
     notice: s.NOTICE || '',
     contact: s.CONTACT || '',
     holidayAsWeekend: s.SPECIAL_DAY_RULE === 'TRUE',
+    blockHolidays: s.BLOCK_HOLIDAYS === 'TRUE',
     allowSelfPin: s.ALLOW_SELF_PIN === 'TRUE',
     closeAt: s.CLOSE_AT || ''
   };
@@ -944,6 +980,14 @@ function cleanText_(v, max) {
 function safeCell_(v) {
   const s = String(v == null ? '' : v);
   return /^[=+\-@]/.test(s) ? "'" + s : s;
+}
+
+function dateRange_(from, to) {
+  const f = validDate_(from), t = validDate_(to);
+  if (t < f) throw appError_('วันที่สิ้นสุดต้องไม่ก่อนวันที่เริ่มต้น', 'BAD_REQUEST');
+  const days = (Date.UTC(+t.slice(0, 4), +t.slice(5, 7) - 1, +t.slice(8)) - Date.UTC(+f.slice(0, 4), +f.slice(5, 7) - 1, +f.slice(8))) / 86400000;
+  if (days > 366) throw appError_('เลือกช่วงวันที่ได้ไม่เกิน 1 ปี', 'BAD_REQUEST');
+  return { from: f, to: t };
 }
 
 function monthRange_(month, upcoming) {

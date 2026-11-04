@@ -215,9 +215,30 @@
               <label class="input w-full col-span-2 md:col-span-1"><i data-lucide="search" class="w-4 h-4 text-primary"></i><input id="f-name" type="search" class="grow" placeholder="ค้นหาชื่อ"></label>
               <label class="label cursor-pointer justify-start gap-2 col-span-2 md:col-span-1 px-1"><input type="checkbox" class="checkbox checkbox-error checkbox-sm" id="f-conflict"><span class="text-sm">เฉพาะรายการซ้ำซ้อน</span></label>
             </div>
+            <div class="flex flex-wrap items-end gap-2">
+              <select class="select w-full sm:w-auto" id="f-slot" aria-label="กรองช่วงเวลา">
+                <option value="">ทุกช่วงเวลา</option><option value="0">เช้า (06:00-08:30 / 06:00-11:00)</option><option value="1">สาย (08:30-12:30 / 06:00-12:00)</option>
+                <option value="2">บ่าย (12:30-16:30 / 06:00-16:00)</option><option value="3">นอกเวลาเย็น (16:30-สิ้นสุด)</option><option value="4">ดึก/ทั้งวัน (06:00-สิ้นสุด)</option>
+              </select>
+              <div class="flex flex-wrap gap-2 w-full sm:w-auto">
+                <label class="input w-full sm:w-auto"><span class="text-xs opacity-70 whitespace-nowrap">ตั้งแต่</span><input type="date" id="f-from" class="min-w-0" aria-label="ตั้งแต่วันที่"></label>
+                <label class="input w-full sm:w-auto"><span class="text-xs opacity-70 whitespace-nowrap">ถึง</span><input type="date" id="f-to" class="min-w-0" aria-label="ถึงวันที่"></label>
+                <button class="btn btn-primary btn-soft flex-1 sm:flex-none" id="f-range-apply" type="button"><i data-lucide="calendar-search" class="w-4 h-4"></i>ใช้ช่วงวันที่</button>
+                <button class="btn" id="f-range-clear" type="button" title="กลับไปดูรายเดือน" aria-label="กลับไปดูรายเดือน"><i data-lucide="x" class="w-4 h-4 text-error"></i></button>
+              </div>
+              <div class="join w-full sm:w-auto sm:ml-auto" id="roster-views" role="tablist">
+                <button class="btn join-item btn-active flex-1 sm:flex-none px-2 sm:px-4" data-view="list" type="button"><i data-lucide="list" class="w-4 h-4 text-primary"></i>รายการ</button>
+                <button class="btn join-item flex-1 sm:flex-none px-2 sm:px-4" data-view="grid" type="button"><i data-lucide="table" class="w-4 h-4 text-info"></i>ตารางเวร</button>
+                <button class="btn join-item flex-1 sm:flex-none px-2 sm:px-4" data-view="missing" type="button"><i data-lucide="user-x" class="w-4 h-4 text-error"></i>ยังไม่จอง</button>
+              </div>
+            </div>
             <div class="flex flex-wrap gap-2" id="adm-stats"></div>
-            <div class="hidden md:block overflow-x-auto rounded-box border border-base-300"><table class="table table-sm table-roster" id="adm-table"></table></div>
-            <div class="md:hidden grid gap-2" id="adm-cards"></div>
+            <div id="pane-list">
+              <div class="hidden md:block overflow-x-auto rounded-box border border-base-300"><table class="table table-sm table-roster" id="adm-table"></table></div>
+              <div class="md:hidden grid gap-2" id="adm-cards"></div>
+            </div>
+            <div id="pane-grid" hidden><div class="overflow-auto rounded-box border border-base-300 max-h-[75vh]"><table class="table table-xs table-pin-rows table-pin-cols grid-table" id="adm-grid"></table></div><p class="text-xs opacity-70 mt-2">ลทบ. = จุดลงทะเบียนรายการตรวจ · อื่นๆ = จุดอื่นๆ (บัตรคิว, นำ-ส่ง สิ่งส่งตรวจ) · ไม่มีวงเล็บ = จุดเจาะเลือด</p></div>
+            <div id="pane-missing" hidden></div>
           </div>
         </div>
         <div class="card bg-base-100 shadow-sm">
@@ -256,6 +277,7 @@
               <h2 class="card-title text-base"><i data-lucide="party-popper" class="w-5 h-5 text-holiday"></i>วันหยุดราชการ</h2>
               <div class="flex flex-wrap gap-2">
                 <select class="select w-auto" id="hol-year" aria-label="ปี"></select>
+                <button class="btn btn-info btn-soft" id="hol-fetch" type="button"><i data-lucide="cloud-download" class="w-4 h-4"></i>ดึงวันหยุดจาก Google</button>
                 <button class="btn btn-ghost" id="hol-add"><i data-lucide="plus" class="w-4 h-4 text-success"></i>เพิ่มวันหยุด</button>
                 <button class="btn btn-primary" id="hol-save"><i data-lucide="save" class="w-4 h-4"></i>บันทึกวันหยุด</button>
               </div>
@@ -286,6 +308,7 @@
                 <p class="text-sm opacity-70 mb-2">หลังวันนี้ระบบปิดรับจองเองโดยไม่ต้องกดปิด และแสดงการนับถอยหลังให้บุคลากรเห็น (ว่าง = ไม่กำหนด)</p>
                 <div class="join w-full max-w-md"><input class="input join-item w-full" type="date" id="set-close-at" aria-label="วันสุดท้ายที่รับจอง"><button class="btn join-item" id="set-close-clear" type="button"><i data-lucide="x" class="w-4 h-4 text-error"></i>ล้าง</button></div>
               </div>
+              <label class="label cursor-pointer justify-start gap-3 whitespace-normal"><input type="checkbox" class="toggle toggle-error" id="set-block-holiday"><span class="text-base-content">วันหยุดนักขัตฤกษ์ปิดรับจอง <span class="opacity-70 text-sm block">บุคลากรกดจองวันหยุดไม่ได้ (ผู้ดูแลยังเพิ่มการจองให้ได้)</span></span></label>
               <label class="label cursor-pointer justify-start gap-3 whitespace-normal"><input type="checkbox" class="toggle toggle-warning" id="set-holiday-rule"><span class="text-base-content">วันหยุดราชการใช้ช่วงเวลาแบบเสาร์-อาทิตย์ (จองได้ 1 เวร)</span></label>
             </div>
           </div>

@@ -75,7 +75,7 @@ async function noHScroll(page) {
     if (!e.offsetParent || e.closest('.overflow-x-auto, dialog, #toasts, .combo-list')) return false;
     const r = e.getBoundingClientRect(); return r.width > 0 && (r.right > innerWidth + 1 || r.left < -1);
   }).slice(0, 5).map((e) => (e.id || e.className || e.tagName).toString().slice(0, 40)));
-  assert.deepEqual(over, [], 'มีองค์ประกอบล้นขอบจอ');
+  assert.deepEqual(over, [], 'มีองค์ประกอบล้นขอบจอ: ' + JSON.stringify(over));
 }
 
 console.log('E2E: ผู้ใช้ (PC เต็มจอ)');
@@ -232,13 +232,20 @@ await step('สรุปเวรของฉัน (เดือน / ล่ว
   await page.click('#dlg-summary [data-close]');
 });
 
-await step('เปลี่ยนเดือน + วันหยุดราชการ (ค่าเริ่มต้นใช้ช่วงแบบวันธรรมดา ตามข้อมูลจริง)', async () => {
+await step('[R29] เปลี่ยนเดือน + วันหยุดนักขัตฤกษ์ปิดรับจอง (กดจอง/เลือกหลายวันไม่ได้)', async () => {
   await page.click('#cal-next');
   await idle(page);
   assert.equal(await page.textContent('#cal-title'), 'ธันวาคม 2569');
   assert.match(await day(page, 7, '12').textContent(), /ชดเชยวันพ่อ/);
   await day(page, 7, '12').click();
-  assert.match(await page.textContent('#day-panel'), /วันหยุดราชการ \(ใช้ช่วงเวลาแบบวันธรรมดา\)/);
+  assert.match(await page.textContent('#day-panel'), /วันหยุดนักขัตฤกษ์ — ปิดรับจอง/);
+  assert.ok(await page.isDisabled('#btn-book'));
+  assert.ok(await day(page, 7, '12').evaluate((e) => e.classList.contains('is-blocked')));
+  await page.check('#multi-toggle');
+  await day(page, 7, '12').click();
+  await expectToast(page, /วันหยุดนักขัตฤกษ์ .*ปิดรับจอง/);
+  assert.equal(await page.locator('#calendar .cal-day.is-picked').count(), 0);
+  await page.uncheck('#multi-toggle');
   await page.click('#cal-prev');
   await idle(page);
 });
@@ -415,7 +422,7 @@ await step('Export Excel: ไฟล์มี 4 แท็บและข้อม
   await dl.saveAs(file);
   assert.match(dl.suggestedFilename(), /^BRS-roster-2569-11\.xlsx$/);
   const wb = XLSX.readFile(file);
-  assert.deepEqual(wb.SheetNames, ['ตารางเวร', 'สรุปรายวัน', 'สรุปรายบุคคล', 'ลา-ยกเลิก']);
+  assert.deepEqual(wb.SheetNames, ['ตารางเวร', 'สรุปรายวัน', 'สรุปรายบุคคล', 'ลา-ยกเลิก', 'ตารางเวร (ตาราง)', 'ยังไม่จอง']);
   const rows = XLSX.utils.sheet_to_json(wb.Sheets['ตารางเวร'], { header: 1 });
   assert.equal(rows.length, 12);
   assert.deepEqual(rows[0].slice(8), ['เช้า', 'สาย', 'บ่าย', 'นอกเวลาเย็น', 'ดึก']);
@@ -676,6 +683,58 @@ await step('[R25] วันปิดรับอัตโนมัติ: ผู
   await nf.waitForTimeout(300);
   await nf.screenshot({ path: path.join(OUT, 'pc-user-v2.png') });
   assert.deepEqual(await nf.evaluate(() => window.__csp), []);
+});
+
+await step('[R30] ผู้ดูแล: กรองช่วงวันที่ข้ามเดือน + ช่วงเวลา, มุมมองตารางเวร, รายชื่อคนยังไม่จอง และ Export ตามตัวกรอง', async () => {
+  await adm.click('#side-nav [data-tab="roster"]');
+  await adm.fill('#f-from', '2026-11-01'); await adm.fill('#f-to', '2026-12-31');
+  await adm.click('#f-range-apply');
+  await expectToast(adm, /แสดงข้อมูล 1 พฤศจิกายน 2569 – 31 ธันวาคม 2569/);
+  assert.equal(await adm.textContent('#adm-title'), '1 พฤศจิกายน 2569 – 31 ธันวาคม 2569');
+  assert.match(await adm.textContent('#adm-table'), /ธ\. ?|ธ\/|\/12\/69/);
+  await adm.selectOption('#f-slot', '4');
+  const rows = await adm.$$eval('#adm-table tbody tr', (r) => r.map((x) => x.textContent));
+  assert.ok(rows.length > 0 && rows.every((x) => /06:00-สิ้นสุด/.test(x)), 'กรองเฉพาะช่วงดึก/ทั้งวัน: ' + rows.length);
+  await adm.selectOption('#f-slot', '');
+  await adm.click('#roster-views [data-view="grid"]');
+  assert.ok(await adm.isVisible('#pane-grid'));
+  assert.equal(await adm.locator('#adm-grid tbody tr').count(), 61, 'ทุกวันในช่วง 61 วัน');
+  assert.match(await adm.textContent('#adm-grid thead'), /OPD.*เช้า/);
+  assert.match(await adm.textContent('#adm-grid'), /สมชาย/);
+  await adm.screenshot({ path: path.join(OUT, 'pc-admin-grid.png') });
+  await adm.click('#roster-views [data-view="missing"]');
+  assert.match(await adm.textContent('#pane-missing'), /ใหม่ ล่าสุด/);
+  assert.match(await adm.textContent('#adm-stats'), /ยังไม่จอง \d+ คน/);
+  await adm.selectOption('#f-position', 'นักเทคนิคการแพทย์(MT Parttime)');
+  assert.doesNotMatch(await adm.textContent('#pane-missing'), /ใหม่ ล่าสุด/, 'กรองตามตำแหน่ง');
+  await adm.screenshot({ path: path.join(OUT, 'pc-admin-missing.png') });
+  const [dl] = await Promise.all([adm.waitForEvent('download'), adm.click('#adm-excel')]);
+  assert.equal(dl.suggestedFilename(), 'BRS-roster-2026-11-01_2026-12-31.xlsx');
+  const f = path.join(OUT, 'export-range.xlsx'); await dl.saveAs(f);
+  const wb = XLSX.readFile(f);
+  const main = XLSX.utils.sheet_to_json(wb.Sheets['ตารางเวร']);
+  assert.ok(main.length > 0 && main.every((r) => r['ตำแหน่ง'] === 'นักเทคนิคการแพทย์(MT Parttime)'), 'Export เฉพาะตำแหน่งที่กรอง');
+  const grid = XLSX.utils.sheet_to_json(wb.Sheets['ตารางเวร (ตาราง)'], { header: 1 });
+  assert.equal(grid[1][0], '1 พฤศจิกายน 2569'); assert.equal(grid[grid.length - 1][0], '31 ธันวาคม 2569', 'Export ข้ามเดือน');
+  const miss = XLSX.utils.sheet_to_json(wb.Sheets['ยังไม่จอง']);
+  assert.ok(miss.every((r) => r['ตำแหน่ง'] === 'นักเทคนิคการแพทย์(MT Parttime)'));
+  assert.equal(XLSX.utils.sheet_to_json(wb.Sheets['ตารางเวร (ตาราง)'], { header: 1 }).length, 62);
+  await expectToast(adm, /ดาวน์โหลดไฟล์ Excel แล้ว/);
+  await adm.selectOption('#f-position', '');
+  await adm.click('#roster-views [data-view="list"]');
+  await adm.click('#f-range-clear');
+  await idle(adm);
+  assert.equal(await adm.textContent('#adm-title'), 'พฤศจิกายน 2569');
+});
+
+await step('[R31] ดึงวันหยุดนักขัตฤกษ์จาก Google แล้วบันทึก (ข้ามวันสำคัญที่ไม่ใช่วันหยุด)', async () => {
+  await adm.click('#side-nav [data-tab="holidays"]');
+  await adm.selectOption('#hol-year', '2027');
+  await adm.click('#hol-fetch');
+  await expectToast(adm, /เพิ่มใหม่ 1 วัน \(ข้ามวันสำคัญที่ไม่ใช่วันหยุด 1 วัน\)/);
+  assert.equal(await adm.locator('#hol-table input[value="2027-03-15"]').count(), 1);
+  await adm.click('#hol-save');
+  await expectToast(adm, /บันทึกวันหยุด 28 วัน/);
 });
 
 console.log('E2E: มือถือ / แท็บเล็ต');

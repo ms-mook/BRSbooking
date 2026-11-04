@@ -122,7 +122,15 @@ export function createGas(opts = {}) {
       MimeType: { JSON: 'json' },
       createTextOutput: (s) => ({ content: s, setMimeType() { return this; }, getContent() { return this.content; } })
     },
-    Logger: { log: () => {} }
+    Logger: { log: () => {} },
+    CalendarApp: {
+      getCalendarById: (id) => (opts.calendarEvents && id === 'th.th#holiday@group.v.calendar.google.com' ? {
+        getEvents: (start, end) => opts.calendarEvents
+          .map((e) => ({ t: new Date(Date.parse(e.date + 'T00:00:00+07:00')), e }))
+          .filter((x) => x.t >= start && x.t < end)
+          .map((x) => ({ getStartTime: () => x.t, getTitle: () => x.e.title, getDescription: () => x.e.desc || '' }))
+      } : null)
+    }
   };
   vm.createContext(sandbox);
   vm.runInContext(fs.readFileSync(path.join(ROOT, 'apps-script/Code.gs'), 'utf8'), sandbox, { filename: 'Code.gs' });

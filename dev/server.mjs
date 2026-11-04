@@ -27,6 +27,12 @@ function resetMock() {
   gas = createGas({
     now: process.env.MOCK_NOW || undefined,
     props: { ADMIN_USER: 'admin', ADMIN_PASS: 'admin1234' },
+    calendarEvents: [
+      { date: '2027-01-01', title: 'วันขึ้นปีใหม่', desc: 'วันหยุดนักขัตฤกษ์' },
+      { date: '2027-01-09', title: 'วันเด็กแห่งชาติ', desc: 'การเฉลิมฉลอง' },
+      { date: '2027-03-15', title: 'วันหยุดพิเศษ (ทดสอบ)', desc: 'วันหยุดนักขัตฤกษ์' },
+      { date: '2027-04-13', title: 'วันสงกรานต์', desc: 'วันหยุดนักขัตฤกษ์' }
+    ],
     sheets: { 'Booking Data': loadRows(), Leave: [LEAVE_HEADER] }
   });
 }
