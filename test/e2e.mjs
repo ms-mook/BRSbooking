@@ -68,8 +68,14 @@ async function firstLogin(page, q, name, pin) {
   await idle(page);
 }
 async function noHScroll(page) {
-  const w = await page.evaluate(() => [document.documentElement.scrollWidth, window.innerWidth]);
-  assert.ok(w[0] <= w[1] + 1, 'มี scroll แนวนอน ' + w);
+  const w = await page.evaluate(() => [document.documentElement.scrollWidth, window.innerWidth, window.scrollX]);
+  assert.ok(w[0] <= w[1] + 1 && w[2] === 0, 'มี scroll แนวนอน ' + w);
+  // ตรวจว่าไม่มีองค์ประกอบล้นขอบจอ (แม้หน้าเว็บจะซ่อน scroll แนวนอนไว้)
+  const over = await page.evaluate(() => Array.from(document.querySelectorAll('main *')).filter((e) => {
+    if (!e.offsetParent || e.closest('.overflow-x-auto, dialog, #toasts, .combo-list')) return false;
+    const r = e.getBoundingClientRect(); return r.width > 0 && (r.right > innerWidth + 1 || r.left < -1);
+  }).slice(0, 5).map((e) => (e.id || e.className || e.tagName).toString().slice(0, 40)));
+  assert.deepEqual(over, [], 'มีองค์ประกอบล้นขอบจอ');
 }
 
 console.log('E2E: ผู้ใช้ (PC เต็มจอ)');
@@ -110,9 +116,9 @@ await step('เลือกชื่อ → ใส่ PIN → ระบบบอ
 });
 
 await step('PC แสดงผลเต็มความกว้างจอ (ไม่ล็อกกลางจอ)', async () => {
-  const w = await page.evaluate(() => ({ view: document.getElementById('view-user').getBoundingClientRect().width, cal: document.getElementById('calendar').getBoundingClientRect().width, vw: innerWidth }));
-  assert.ok(w.view >= w.vw - 20, 'view ' + JSON.stringify(w));
-  assert.ok(w.cal > w.vw * 0.55, 'ปฏิทินใช้พื้นที่ส่วนใหญ่ของจอ ' + JSON.stringify(w));
+  const w = await page.evaluate(() => ({ view: document.getElementById('view-user').getBoundingClientRect().width, side: document.getElementById('sidebar').getBoundingClientRect().width, cal: document.getElementById('calendar').getBoundingClientRect().width, vw: innerWidth }));
+  assert.ok(w.side > 200 && w.view >= w.vw - w.side - 20, 'เนื้อหาใช้พื้นที่เต็มจอที่เหลือจากเมนูซ้าย ' + JSON.stringify(w));
+  assert.ok(w.cal > (w.vw - w.side) * 0.5, 'ปฏิทินใช้พื้นที่ส่วนใหญ่ ' + JSON.stringify(w));
 });
 
 await step('ปฏิทินแสดงเวรที่จองไว้ วันหยุด วันนี้ และสถานะเปิดรับ', async () => {
@@ -324,8 +330,8 @@ await step('เข้าสู่ระบบผู้ดูแล (ผิด/�
 });
 
 await step('ตารางเวรรวมเต็มจอ สถิติ และตัวกรอง', async () => {
-  const w = await adm.evaluate(() => document.getElementById('adm-table').getBoundingClientRect().width);
-  assert.ok(w > 1700, 'ตารางกว้างเต็มจอ 1920px: ' + w);
+  const w = await adm.evaluate(() => [document.getElementById('adm-table').getBoundingClientRect().width, document.getElementById('sidebar').getBoundingClientRect().width]);
+  assert.ok(w[0] > (1920 - w[1]) * 0.9, 'ตารางกว้างเต็มพื้นที่ที่เหลือจากเมนูซ้าย: ' + w);
   assert.match(await adm.textContent('#adm-stats'), /รายการ 11/);
   await adm.fill('#f-name', 'สมชาย');
   assert.match(await adm.textContent('#adm-stats'), /รายการ 5/);
@@ -432,7 +438,7 @@ await step('พิมพ์ / PDF ตารางเวร', async () => {
 });
 
 await step('บุคลากร: อนุมัติคำขอ แก้ไข รีเซ็ต PIN และเพิ่มคนใหม่', async () => {
-  await adm.click('#admin-tabs [data-tab="staff"]');
+  await adm.click('#side-nav [data-tab="staff"]');
   assert.ok(await adm.isVisible('#pending-card'));
   assert.match(await adm.textContent('#pending-table'), /แอน'นา ทดลอง "ใหม่"/);
   await adm.click('#pending-table [data-approve]');
@@ -462,7 +468,7 @@ await step('บุคลากร: อนุมัติคำขอ แก้�
 });
 
 await step('วันหยุด: เพิ่ม แก้ ลบ และบันทึก', async () => {
-  await adm.click('#admin-tabs [data-tab="holidays"]');
+  await adm.click('#side-nav [data-tab="holidays"]');
   assert.equal(await adm.inputValue('#hol-year'), '2026');
   assert.equal(await adm.locator('#hol-table tbody tr').count(), 6);
   await adm.click('#hol-add');
@@ -480,7 +486,7 @@ await step('วันหยุด: เพิ่ม แก้ ลบ และบ
 });
 
 await step('ตั้งค่า: ปิดรอบเดือน พ.ย. (เปิดเฉพาะ ธ.ค.), ปิดการตั้ง PIN เอง และแก้ประกาศ', async () => {
-  await adm.click('#admin-tabs [data-tab="settings"]');
+  await adm.click('#side-nav [data-tab="settings"]');
   assert.ok(await adm.isChecked('#set-open'));
   assert.ok(!(await adm.isChecked('#set-holiday-rule')));
   assert.ok(await adm.isChecked('#set-self-pin'));
@@ -499,7 +505,7 @@ await step('ตั้งค่า: ปิดรอบเดือน พ.ย. (�
 
 let tempPin = '';
 await step('[R17] ปิดตั้ง PIN เอง: รีเซ็ต PIN ได้ PIN ชั่วคราว 6 หลัก', async () => {
-  await adm.click('#admin-tabs [data-tab="staff"]');
+  await adm.click('#side-nav [data-tab="staff"]');
   await adm.fill('#staff-filter', 'สมหญิง');
   await adm.click('#staff-table [data-sreset]');
   await adm.click('#ask-ok');
@@ -564,6 +570,114 @@ await step('ไม่มี CSP violation ในหน้าผู้ดูแ�
   assert.deepEqual(await adm.evaluate(() => window.__csp), []);
 });
 
+console.log('E2E: ฟีเจอร์ใหม่ (ธีม ฟอนต์ เมนูซ้าย ภาพรวม จองหลายวัน ปฏิทินมือถือ วันปิดรับ)');
+const nf = await newPage({ colorScheme: 'dark' });
+await step('[R20] ธีมเริ่มต้นเป็นสว่างแม้เครื่องตั้งโหมดมืด, สลับ มืด → ตามเครื่อง → สว่าง และจำค่าไว้', async () => {
+  await nf.goto(BASE);
+  await nf.waitForSelector('#view-login:not([hidden])');
+  const theme = () => nf.evaluate(() => [document.documentElement.dataset.theme, document.documentElement.dataset.mode]);
+  assert.deepEqual(await theme(), ['corporate', 'light']);
+  await nf.click('#theme-btn');
+  assert.deepEqual(await theme(), ['business', 'dark']);
+  await nf.reload(); await nf.waitForSelector('#view-login:not([hidden])');
+  assert.deepEqual(await theme(), ['business', 'dark'], 'จำธีมหลังรีเฟรช');
+  await nf.waitForTimeout(800);
+  await nf.screenshot({ path: path.join(OUT, 'pc-login-dark.png') });
+  await nf.click('#theme-btn');
+  assert.deepEqual(await theme(), ['business', 'auto'], 'ตามเครื่อง (เครื่องตั้งมืด)');
+  await nf.click('#theme-btn');
+  assert.deepEqual(await theme(), ['corporate', 'light']);
+});
+
+await step('[R21] ใช้ฟอนต์ Sarabun จากเว็บเอง และขนาดตัวอักษรบน PC ใหญ่ขึ้น', async () => {
+  await nf.evaluate(() => document.fonts.ready);
+  const r = await nf.evaluate(async () => { await document.fonts.load('16px Sarabun', 'ก'); return { ok: document.fonts.check('16px Sarabun', 'กขค'), fam: getComputedStyle(document.body).fontFamily, size: getComputedStyle(document.documentElement).fontSize }; });
+  assert.ok(r.ok, 'โหลด Sarabun ไม่สำเร็จ');
+  assert.match(r.fam, /Sarabun/);
+  assert.equal(r.size, '16.5px');
+});
+
+await step('[R22] เมนูด้านซ้ายบน PC + หัวเรื่องหน้า + ภาพรวม (เวรถัดไป / เวรเดือนนี้ / รอบการจอง)', async () => {
+  await adm.click('#side-nav [data-tab="settings"]');
+  await adm.check('#set-self-pin');
+  await adm.click('#set-save');
+  await expectToast(adm, /บันทึกการตั้งค่าแล้ว/);
+  await firstLogin(nf, 'มานะ', 'มานะ', '5307');
+  assert.ok(await nf.isVisible('#sidebar'));
+  assert.match(await nf.textContent('#side-foot'), /มานะ ขยันยิ่ง/);
+  assert.equal(await nf.textContent('#page-name'), 'ปฏิทินจองเวร');
+  assert.ok(await nf.isHidden('#user-dock'), 'PC ไม่แสดงเมนูล่าง');
+  await nf.waitForFunction(() => document.getElementById('kpi-next'));
+  assert.match(await nf.textContent('#kpi-round'), /ปิดรับจอง|เปิดรับจอง|เหลืออีก/);
+  assert.match(await nf.textContent('#kpi-month'), /\d+ วัน · \d+ ช่วง/);
+});
+
+await step('[R23] จองหลายวันพร้อมกัน: เลือกวันธรรมดา 3 วัน กันเลือกปนเสาร์-อาทิตย์ แล้วบันทึกครั้งเดียว', async () => {
+  await nf.click('#cal-next'); await idle(nf);
+  assert.equal(await nf.textContent('#cal-title'), 'ธันวาคม 2569');
+  await nf.check('#multi-toggle');
+  for (const d of ['21', '22', '23']) await nf.click('#calendar .cal-day[data-date="2026-12-' + d + '"]');
+  await nf.click('#calendar .cal-day[data-date="2026-12-26"]');
+  await expectToast(nf, /ประเภทเดียวกัน/);
+  await nf.click('#calendar .cal-day[data-date="2026-12-22"]');
+  await nf.click('#calendar .cal-day[data-date="2026-12-22"]');
+  assert.equal(await nf.locator('#calendar .cal-day.is-picked').count(), 3);
+  assert.match(await nf.textContent('#btn-book-multi'), /3 วัน/);
+  await nf.click('#btn-book-multi');
+  await nf.waitForSelector('#dlg-booking[open]');
+  assert.match(await nf.textContent('#booking-title'), /จองหลายวัน \(3 วัน\)/);
+  await nf.selectOption('#booking-room', 'ห้องเจาะเลือดอาคารผู้ป่วยนอก OPD');
+  await nf.selectOption('#booking-station', 'จุดเจาะเลือด');
+  await nf.check('#booking-slots input[value="06:00-08:30"]');
+  await nf.check('#booking-slots input[value="08:30-12:30"]');
+  await nf.click('#booking-submit');
+  await expectToast(nf, /บันทึกการจอง 3 วัน/);
+  assert.ok(!(await nf.isChecked('#multi-toggle')), 'ออกจากโหมดเลือกหลายวันอัตโนมัติ');
+  for (const d of ['21', '22', '23']) assert.match(await nf.locator('#calendar .cal-day[data-date="2026-12-' + d + '"]').textContent(), /OPD เช้า·สาย/);
+  // บางวันซ้ำ → บันทึกเฉพาะวันที่ผ่าน และแจ้งรายการที่ไม่สำเร็จ
+  await nf.check('#multi-toggle');
+  for (const d of ['23', '24']) await nf.click('#calendar .cal-day[data-date="2026-12-' + d + '"]');
+  await nf.click('#btn-book-multi');
+  await nf.selectOption('#booking-room', 'ห้องเจาะเลือด SMC');
+  await nf.selectOption('#booking-station', 'จุดเจาะเลือด');
+  await nf.check('#booking-slots input[value="06:00-08:30"]');
+  await nf.click('#booking-submit');
+  await nf.waitForSelector('#dlg-ask[open]');
+  assert.match(await nf.textContent('#ask-text'), /23 ธันวาคม 2569: พบการจองซ้ำซ้อน/);
+  await nf.click('#ask-ok');
+  await expectToast(nf, /บันทึกการจอง 1 วัน \(ไม่สำเร็จ 1 วัน\)/);
+  await nf.screenshot({ path: path.join(OUT, 'pc-multi.png') });
+});
+
+await step('[R24] เพิ่มเวรลงปฏิทินมือถือ (.ics) ได้ไฟล์ที่ถูกต้อง', async () => {
+  await nf.click('#btn-summary');
+  await nf.waitForSelector('#dlg-summary[open]');
+  const [dl] = await Promise.all([nf.waitForEvent('download'), nf.click('#summary-ics')]);
+  assert.equal(dl.suggestedFilename(), 'BRS-my-shifts.ics');
+  const f = path.join(OUT, 'my.ics'); await dl.saveAs(f);
+  const ics = fs.readFileSync(f, 'utf8');
+  assert.equal((ics.match(/BEGIN:VEVENT/g) || []).length, 4);
+  assert.match(ics, /DTSTART:20261220T230000Z/, '06:00 น. เวลาไทย = 23:00 UTC ของวันก่อน');
+  assert.match(ics, /DTEND:20261221T053000Z/, '12:30 น. เวลาไทย');
+  await nf.click('#dlg-summary [data-close]');
+});
+
+await step('[R25] วันปิดรับอัตโนมัติ: ผู้ดูแลตั้งวันที่ → ผู้ใช้เห็นนับถอยหลัง', async () => {
+  await adm.click('#side-nav [data-tab="settings"]');
+  await adm.fill('#set-close-at', '2026-11-10');
+  await adm.click('#set-save');
+  await expectToast(adm, /บันทึกการตั้งค่าแล้ว/);
+  await nf.reload(); await nf.waitForSelector('#view-user:not([hidden])');
+  await nf.waitForFunction(() => /เหลืออีก 6 วัน/.test(document.getElementById('kpi-round').textContent));
+  assert.match(await nf.textContent('#kpi-round'), /ปิดรับจอง 10 พฤศจิกายน 2569/);
+  await adm.click('#set-close-clear');
+  await adm.click('#set-save');
+  await expectToast(adm, /บันทึกการตั้งค่าแล้ว/);
+  await nf.waitForTimeout(300);
+  await nf.screenshot({ path: path.join(OUT, 'pc-user-v2.png') });
+  assert.deepEqual(await nf.evaluate(() => window.__csp), []);
+});
+
 console.log('E2E: มือถือ / แท็บเล็ต');
 const DEV = [
   { name: 'iphone-se', d: devices['iPhone SE'], who: 'ปิติ', pin: '8024', mobile: true },
@@ -571,7 +685,7 @@ const DEV = [
   { name: 'ipad-mini', d: devices['iPad Mini'], who: 'ใหม่', pin: '6402', mobile: true }
 ];
 // ตอนนี้ปิดการตั้ง PIN เองอยู่ → เปิดกลับเพื่อทดสอบผู้ใช้ใหม่บนมือถือ
-await adm.click('#admin-tabs [data-tab="settings"]');
+await adm.click('#side-nav [data-tab="settings"]');
 await adm.check('#set-self-pin');
 await adm.click('#set-save');
 await expectToast(adm, /บันทึกการตั้งค่าแล้ว/);
@@ -602,7 +716,7 @@ for (const v of DEV) {
     await m.waitForTimeout(600);
     await m.screenshot({ path: path.join(OUT, v.name + '-user.png'), fullPage: true });
     const small = await m.$$eval('#view-user .btn', (els) => els.filter((e) => e.offsetParent && e.getBoundingClientRect().height < 36).map((e) => e.id || e.textContent.trim()));
-    assert.deepEqual(small, [], 'ปุ่มเล็กเกินไปสำหรับนิ้ว');
+    assert.deepEqual(small, [], 'ปุ่มเล็กเกินไปสำหรับนิ้ว: ' + JSON.stringify(small));
     await m.locator('#btn-book').tap();
     await m.waitForSelector('#dlg-booking[open]');
     await m.selectOption('#booking-room', 'ห้องเจาะเลือด SMC');
@@ -615,6 +729,8 @@ for (const v of DEV) {
     await m.screenshot({ path: path.join(OUT, v.name + '-booking.png') });
     await m.locator('#booking-submit').tap();
     await expectToast(m, /บันทึกการจองสำเร็จ/);
+    await m.waitForFunction(() => /OPD|SMC|กว\./.test(document.getElementById('kpi-next').textContent));
+    await noHScroll(m);
     if (isPhone) {
       await m.locator('#dock-summary').tap();
       await m.waitForSelector('#dlg-summary[open]');

@@ -67,6 +67,7 @@
   function monthOpen(key) {
     const st = S.info.settings;
     if (!st.bookingOpen) return false;
+    if (st.closeAt && S.info.today > st.closeAt) return false;
     return !st.bookingMonths.length || st.bookingMonths.indexOf(key.slice(0, 7)) >= 0;
   }
   function sortSlots(slots) { return slots.slice().sort((a, b) => SLOT_COL[a] - SLOT_COL[b]); }
@@ -230,13 +231,73 @@
     });
   }
 
+  /* ---------------- ธีม สว่าง / มืด / ตามเครื่อง ---------------- */
+  const THEME = { light: ['sun', 'text-warning', 'ธีมสว่าง'], dark: ['moon', 'text-info', 'ธีมมืด'], auto: ['monitor', 'text-primary', 'ตามการตั้งค่าเครื่อง'] };
+  function getMode() { try { return localStorage.getItem('brs_theme') || 'light'; } catch (e) { return 'light'; } }
+  function applyTheme(mode) {
+    const dark = mode === 'dark' || (mode === 'auto' && window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches);
+    document.documentElement.setAttribute('data-theme', dark ? 'business' : 'corporate');
+    document.documentElement.setAttribute('data-mode', mode);
+    const t = THEME[mode];
+    const btn = $('theme-btn');
+    btn.innerHTML = ic(t[0], 'w-5 h-5 ' + t[1]);
+    btn.title = 'ธีม: ' + t[2] + ' (กดเพื่อสลับ)';
+    btn.setAttribute('aria-label', 'ธีม: ' + t[2]);
+  }
+  function cycleTheme() {
+    const order = ['light', 'dark', 'auto'];
+    const next = order[(order.indexOf(getMode()) + 1) % 3];
+    try { localStorage.setItem('brs_theme', next); } catch (e) { /* ignore */ }
+    applyTheme(next);
+    toast('เปลี่ยนเป็น' + THEME[next][2], 'info');
+  }
+
+  /* ---------------- แถบเมนูซ้าย (PC) + หัวเรื่องหน้า ---------------- */
+  const PAGES = {
+    user: ['calendar-days', 'ปฏิทินจองเวร', 'เลือกวันเพื่อจอง แก้ไข หรือยกเลิกเวร'],
+    roster: ['calendar-range', 'ตารางเวรรวม', 'ภาพรวมการจองของบุคลากรทั้งหมด'],
+    staff: ['users', 'บุคลากร', 'อนุมัติคำขอ แก้ไขข้อมูล และรีเซ็ต PIN'],
+    holidays: ['party-popper', 'วันหยุดราชการ', 'แก้ไขได้เมื่อมีประกาศเปลี่ยนแปลง'],
+    settings: ['settings', 'ตั้งค่าระบบ', 'รอบการจอง ประกาศ และความปลอดภัย']
+  };
+  function setPage(key) {
+    const p = PAGES[key]; if (!p) return;
+    $('page-icon').innerHTML = ic(p[0]);
+    $('page-name').textContent = p[1];
+    $('page-sub').textContent = p[2];
+  }
+  function sideItem(id, icon, color, label, extra) {
+    return '<li><button type="button" class="side-link flex items-center gap-3 py-2.5" ' + (id ? 'id="' + id + '" ' : '') + (extra || '') + '>' + ic(icon, 'w-5 h-5 ' + color) + '<span>' + esc(label) + '</span></button></li>';
+  }
+  function renderSidebar(view) {
+    const nav = $('side-nav'), foot = $('side-foot');
+    if (view === 'user') {
+      $('side-label').textContent = 'เมนูบุคลากร';
+      nav.innerHTML = sideItem('side-calendar', 'calendar-days', 'text-primary', 'ปฏิทินจองเวร') + sideItem('btn-summary', 'list-checks', 'text-success', 'สรุปเวรของฉัน') + sideItem('btn-change-pin', 'key-round', 'text-warning', 'เปลี่ยน PIN');
+      foot.innerHTML = '<div class="flex items-center gap-3 p-2 rounded-box bg-base-200/60">' + ic('circle-user-round', 'w-8 h-8 text-info') + '<div class="min-w-0 flex-1"><div class="font-semibold truncate">' + esc(S.user.firstName + ' ' + S.user.lastName) + '</div><div class="text-xs opacity-60 truncate">' + esc(POS_SHORT[S.user.position] || S.user.position) + '</div></div></div>' +
+        '<button type="button" class="btn btn-ghost btn-block justify-start mt-2" id="btn-logout">' + ic('log-out', 'w-5 h-5 text-error') + 'ออกจากระบบ</button>';
+      $('side-calendar').classList.add('active');
+      $('side-calendar').onclick = () => window.scrollTo({ top: 0, behavior: 'smooth' });
+      $('btn-summary').onclick = () => openSummary('month');
+      $('btn-change-pin').onclick = openPinDialog;
+      $('btn-logout').onclick = logout;
+    } else if (view === 'admin') {
+      $('side-label').textContent = 'เมนูผู้ดูแล';
+      nav.innerHTML = sideItem('', 'calendar-range', 'text-primary', 'ตารางเวรรวม', 'data-tab="roster"') + sideItem('', 'users', 'text-info', 'บุคลากร', 'data-tab="staff"') +
+        sideItem('', 'party-popper', 'text-holiday', 'วันหยุดราชการ', 'data-tab="holidays"') + sideItem('', 'settings', 'text-accent', 'ตั้งค่าระบบ', 'data-tab="settings"');
+      foot.innerHTML = '<div class="flex items-center gap-3 p-2 rounded-box bg-base-200/60">' + ic('shield-check', 'w-8 h-8 text-secondary') + '<div class="font-semibold">ผู้ดูแลระบบ</div></div>';
+      nav.querySelectorAll('[data-tab]').forEach((b) => { b.onclick = () => switchTab(b.dataset.tab); });
+    }
+  }
+
   function showView(name) {
     ['loading', 'login', 'user', 'admin'].forEach((v) => { $('view-' + v).hidden = v !== name; });
     const act = $('topbar-actions');
     act.innerHTML = '';
-    if (name === 'user') act.innerHTML = '<button class="btn btn-ghost btn-sm hidden lg:inline-flex" id="btn-logout">' + ic('log-out', 'w-4 h-4 text-error') + 'ออกจากระบบ</button>';
+    const shell = name === 'user' || name === 'admin';
+    document.body.classList.toggle('has-sidebar', shell);
+    if (shell) { renderSidebar(name); setPage(name === 'user' ? 'user' : S.admin.tab); }
     if (name === 'admin') act.innerHTML = '<span class="badge badge-secondary badge-soft gap-1 hidden sm:inline-flex">' + ic('shield-check', 'w-3.5 h-3.5') + 'ผู้ดูแลระบบ</span><button class="btn btn-ghost btn-sm" id="btn-admin-logout" aria-label="ออกจากระบบผู้ดูแล">' + ic('log-out', 'w-4 h-4 text-error') + '<span class="hidden sm:inline">ออกจากระบบ</span></button>';
-    const lo = $('btn-logout'); if (lo) lo.onclick = logout;
     const alo = $('btn-admin-logout'); if (alo) alo.onclick = adminLogout;
     if (name === 'login') resetLogin();
     window.scrollTo(0, 0);
@@ -247,12 +308,15 @@
     const html = st.notice
       ? '<div role="note" class="alert alert-soft alert-info items-start">' + ic('megaphone', 'w-5 h-5 text-info mt-0.5') + '<div class="text-sm"><b>หมายเหตุ:</b> ' + esc(st.notice) + (st.contact ? ' <span class="whitespace-nowrap">' + ic('phone', 'w-3.5 h-3.5 inline text-success') + ' ติดต่อ ' + esc(st.contact) + '</span>' : '') + '</div></div>'
       : '';
+    $('forgot-contact').textContent = st.contact ? 'โทร ' + st.contact : '';
     $('notice-login').innerHTML = html;
     $('notice-user').innerHTML = html;
   }
 
   /* ---------------- boot ---------------- */
   async function boot() {
+    applyTheme(getMode());
+    if (window.matchMedia) matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { if (getMode() === 'auto') applyTheme('auto'); });
     bindStatic();
     try {
       S.info = await api('getPublicInfo', {}, { silent: true });
@@ -345,6 +409,8 @@
       afterLogin(r);
     } catch (e) {
       if (e.code === 'NO_PIN') {
+        // ผู้ดูแลอาจเพิ่งเปลี่ยนการตั้งค่า — ดึงค่าล่าสุดก่อนตัดสินใจ
+        try { const fresh = await api('getPublicInfo', {}, { silent: true }); S.info.settings = fresh.settings; S.info.holidays = fresh.holidays; } catch (x) { /* ใช้ค่าเดิม */ }
         if (!S.info.settings.allowSelfPin) { toast('บัญชีนี้ยังไม่มี PIN กรุณาติดต่อผู้ดูแลเพื่อขอ PIN ชั่วคราว', 'warn'); return; }
         toast('ยังไม่เคยตั้ง PIN — ตั้ง PIN ใหม่ได้เลย', 'info'); showSetup(); return;
       }
@@ -394,7 +460,11 @@
   /* ---------------- user view ---------------- */
   async function enterUser() {
     const r = await loadMyMonth();
-    $('hello').textContent = 'สวัสดี ' + S.user.firstName + ' ' + S.user.lastName;
+    const h = new Date().getHours();
+    $('greet-time').textContent = h < 12 ? 'สวัสดีตอนเช้า' : h < 17 ? 'สวัสดีตอนบ่าย' : 'สวัสดีตอนเย็น';
+    $('hello').textContent = S.user.firstName + ' ' + S.user.lastName;
+    S.multi = null; $('multi-toggle').checked = false;
+    loadUpcoming();
     $('user-position').textContent = S.user.position;
     showView('user');
     renderCalendar();
@@ -402,11 +472,41 @@
     if (r && r.mustChange && !$('dlg-pin').open) forceChangePin();
   }
 
+  async function loadUpcoming() {
+    try { const r = await api('getMyBookings', { token: S.token, upcoming: true }, { silent: true }); S.upcoming = r.bookings; } catch (e) { S.upcoming = null; }
+    renderKpis();
+  }
+
+  function kpi(icon, tone, label, value, sub, id) {
+    return '<div class="kpi card bg-base-100 shadow-sm motion-fade-up"' + (id ? ' id="' + id + '"' : '') + '><div class="card-body p-4 flex-row items-center gap-3"><span class="icon-tile ' + tone + '">' + ic(icon) + '</span><div class="min-w-0"><div class="text-xs opacity-70">' + esc(label) + '</div><div class="text-lg font-bold leading-tight truncate">' + value + '</div>' + (sub ? '<div class="text-xs opacity-70 truncate">' + sub + '</div>' : '') + '</div></div></div>';
+  }
+
+  function renderKpis() {
+    if (!S.user || !$('kpis')) return;
+    const next = (S.upcoming || []).filter((b) => b.date >= S.info.today)[0];
+    const days = {}; let slots = 0;
+    S.my.bookings.forEach((b) => { days[b.date] = 1; slots += b.slots.length; });
+    const st = S.info.settings;
+    let roundVal, roundSub, roundTone;
+    const closed = !st.bookingOpen || (st.closeAt && S.info.today > st.closeAt);
+    if (closed) { roundVal = 'ปิดรับจอง'; roundSub = st.contact ? 'ติดต่อ ' + esc(st.contact) : ''; roundTone = 'bg-error/15 text-error'; }
+    else if (st.closeAt) {
+      const left = Math.round((Date.UTC(...st.closeAt.split('-').map((x, i) => i === 1 ? x - 1 : +x)) - Date.UTC(...S.info.today.split('-').map((x, i) => i === 1 ? x - 1 : +x))) / 86400000);
+      roundVal = left === 0 ? 'ปิดรับวันนี้' : 'เหลืออีก ' + left + ' วัน';
+      roundSub = 'ปิดรับจอง ' + esc(fmtDate(st.closeAt)); roundTone = left <= 3 ? 'bg-warning/15 text-warning' : 'bg-success/15 text-success';
+    } else { roundVal = 'เปิดรับจอง'; roundSub = st.bookingMonths.length ? 'เดือน ' + esc(st.bookingMonths.map(monthLabel).join(', ')) : 'ทุกเดือนตั้งแต่วันนี้'; roundTone = 'bg-success/15 text-success'; }
+    $('kpis').innerHTML =
+      kpi('calendar-clock', 'bg-primary/15 text-primary', 'เวรถัดไปของฉัน', next ? esc(fmtDate(next.date, true).replace('ที่ ', ' ')) : 'ยังไม่มีเวร', next ? esc(ROOM_SHORT(next.room) + ' · ' + next.slots.join(', ')) : 'เลือกวันบนปฏิทินเพื่อจอง', 'kpi-next') +
+      kpi('list-checks', 'bg-info/15 text-info', 'เวรเดือน' + monthLabel(S.month).split(' ')[0], Object.keys(days).length + ' วัน · ' + slots + ' ช่วง', S.my.leaves.length ? 'ลา/ยกเลิก ' + S.my.leaves.length + ' รายการ' : '', 'kpi-month') +
+      kpi(closed ? 'ban' : 'hourglass', roundTone, 'รอบการจอง', roundVal, roundSub, 'kpi-round');
+  }
+
   async function loadMyMonth(opts) {
     const r = await api('getMyBookings', { token: S.token, month: S.month }, opts);
     S.my = { bookings: r.bookings, leaves: r.leaves };
     S.user = r.user;
     if (r.today) S.info.today = r.today;
+    renderKpis();
     return r;
   }
 
@@ -423,7 +523,7 @@
     monthBusy = false;
     if (!S.token) return;
     renderCalendar(delta);
-    selectDay(null, true);
+    if (S.multi) renderMultiPanel(); else selectDay(null, true);
   }
 
   function renderCalendar(dir) {
@@ -448,6 +548,7 @@
       if (key < S.info.today) cls.push('is-past');
       if (key === S.info.today) cls.push('is-today');
       if (key === S.selected) cls.push('is-selected');
+      if (S.multi && S.multi.indexOf(key) >= 0) cls.push('is-picked');
       const mine = S.my.bookings.filter((b) => b.date === key);
       const chips = mine.map((b) => '<span class="chip">' + esc(ROOM_SHORT(b.room)) + '<span class="slots"> ' + esc(b.slots.map((s) => SLOT_SHORT[s] || s).join('·')) + '</span></span>').join('');
       const label = fmtDate(key, true) + (hol ? ' ' + hol.name : '') + (mine.length ? ' มีเวร ' + mine.length + ' รายการ' : '');
@@ -458,6 +559,41 @@
     cal.innerHTML = html;
     cal.classList.remove('motion-slide-left', 'motion-slide-right');
     if (dir) { void cal.offsetWidth; cal.classList.add(dir > 0 ? 'motion-slide-right' : 'motion-slide-left'); }
+  }
+
+  /* ---------------- เลือกหลายวัน ---------------- */
+  function setMulti(on) {
+    S.multi = on ? [] : null;
+    $('multi-toggle').checked = on;
+    $('multi-hint').textContent = on ? 'แตะวันที่ต้องการ (เลือกได้หลายวัน) แล้วกด "จองวันที่เลือก"' : 'แตะวันที่เพื่อดูหรือจองเวร';
+    renderCalendar();
+    if (on) renderMultiPanel(); else selectDay(null, true);
+  }
+  function togglePick(key) {
+    const i = S.multi.indexOf(key);
+    if (i >= 0) S.multi.splice(i, 1);
+    else {
+      if (key < S.info.today) { toast('ไม่สามารถจองย้อนหลังได้', 'warn'); return; }
+      if (!monthOpen(key)) { toast('ปิดรับจองเวรของเดือนนี้แล้ว', 'warn'); return; }
+      if (S.multi.length && isSpecial(S.multi[0]) !== isSpecial(key)) { toast('เลือกได้เฉพาะวันประเภทเดียวกัน (วันธรรมดา หรือ เสาร์-อาทิตย์/วันหยุด) เพราะช่วงเวลาต่างกัน', 'warn'); return; }
+      if (S.multi.length >= 31) { toast('เลือกได้ไม่เกิน 31 วันต่อครั้ง', 'warn'); return; }
+      S.multi.push(key); S.multi.sort();
+    }
+    const el = document.querySelector('#calendar .cal-day[data-date="' + key + '"]');
+    if (el) el.classList.toggle('is-picked', S.multi.indexOf(key) >= 0);
+    renderMultiPanel();
+  }
+  function renderMultiPanel() {
+    const list = S.multi || [];
+    let html = '<div class="motion-fade-up"><div class="flex items-start gap-3"><span class="icon-tile bg-accent/15 text-accent">' + ic('calendar-range') + '</span><div><h3 class="font-bold text-lg leading-tight">เลือกหลายวัน</h3><div class="text-sm opacity-70">' +
+      (list.length ? 'เลือกแล้ว ' + list.length + ' วัน · ' + (isSpecial(list[0]) ? 'เสาร์-อาทิตย์/วันหยุด (1 ช่วงต่อวัน)' : 'วันธรรมดา') : 'แตะวันที่บนปฏิทินเพื่อเลือก') + '</div></div></div>';
+    html += '<div class="flex flex-wrap gap-1 mt-3" id="multi-list">' + list.map((d) => '<span class="badge badge-accent badge-soft gap-1">' + esc(fmtShort(d)) + '<button type="button" class="btn btn-ghost btn-xs btn-circle" data-unpick="' + d + '" aria-label="เอาออก">' + ic('x', 'w-3 h-3') + '</button></span>').join('') + '</div>';
+    html += '<button class="btn btn-primary btn-block mt-4" id="btn-book-multi"' + (list.length ? '' : ' disabled') + '>' + ic('calendar-plus', 'w-5 h-5') + 'จองวันที่เลือก' + (list.length ? ' (' + list.length + ' วัน)' : '') + '</button>';
+    html += '<button class="btn btn-ghost btn-block mt-2" id="btn-multi-clear"' + (list.length ? '' : ' disabled') + '>' + ic('rotate-ccw', 'w-4 h-4') + 'ล้างที่เลือก</button></div>';
+    $('day-panel').innerHTML = html;
+    $('btn-book-multi').onclick = () => openBooking({ mode: 'bulk', dates: S.multi.slice() });
+    $('btn-multi-clear').onclick = () => { S.multi = []; renderCalendar(); renderMultiPanel(); };
+    $('day-panel').querySelectorAll('[data-unpick]').forEach((b) => { b.onclick = () => togglePick(b.dataset.unpick); });
   }
 
   function selectDay(key, noScroll) {
@@ -526,6 +662,7 @@
       await loadMyMonth();
       renderCalendar();
       selectDay(b.date, true);
+      loadUpcoming();
     } catch (e) { toast(e.message, 'err'); }
   }
 
@@ -535,7 +672,7 @@
     BK = o;
     const isAdmin = o.mode === 'admin';
     const b = o.booking || null;
-    $('booking-title').textContent = b ? 'แก้ไขการจอง' : (isAdmin ? 'เพิ่มการจอง' : 'จองเวร');
+    $('booking-title').textContent = b ? 'แก้ไขการจอง' : (isAdmin ? 'เพิ่มการจอง' : o.mode === 'bulk' ? 'จองหลายวัน (' + o.dates.length + ' วัน)' : 'จองเวร');
     $('booking-staff-field').hidden = !isAdmin;
     $('booking-date-field').hidden = !isAdmin;
     $('booking-date').hidden = isAdmin;
@@ -546,6 +683,8 @@
       const cur = b ? staff.find((s) => s.firstName === b.firstName && s.lastName === b.lastName) : null;
       $('booking-staff').value = cur ? cur.id : '';
       $('booking-date-input').value = o.date || '';
+    } else if (o.mode === 'bulk') {
+      $('booking-date').innerHTML = ic('calendar-range', 'w-5 h-5 text-accent') + '<span class="font-semibold">' + esc(o.dates.map(fmtShort).join(', ')) + '</span>';
     } else {
       $('booking-date').innerHTML = ic('calendar-days', 'w-5 h-5 text-primary') + '<span class="font-semibold">' + esc(fmtDate(o.date, true)) + '</span>';
     }
@@ -556,7 +695,7 @@
     openDialog('dlg-booking');
   }
 
-  function bookingDate() { return BK.mode === 'admin' ? $('booking-date-input').value : BK.date; }
+  function bookingDate() { return BK.mode === 'admin' ? $('booking-date-input').value : BK.mode === 'bulk' ? BK.dates[0] : BK.date; }
 
   function fillStations(selected) {
     const room = S.info.rooms.find((r) => r.name === $('booking-room').value);
@@ -600,6 +739,20 @@
     const btn = $('booking-submit');
     if (btn.disabled) return; // กันกดซ้ำ
     try {
+      if (BK.mode === 'bulk') {
+        const res = await api('saveBookings', { token: S.token, dates: BK.dates, room: args.room, station: args.station, slots: args.slots }, { btn: btn });
+        $('dlg-booking').close();
+        setMulti(false);
+        await loadMyMonth();
+        renderCalendar();
+        loadUpcoming();
+        if (!res.failed) toast(res.message, 'ok');
+        else {
+          toast(res.message, 'warn');
+          await ask({ title: 'บางวันจองไม่สำเร็จ', icon: 'triangle-alert', alertOnly: true, okText: 'รับทราบ', text: res.results.filter((r) => !r.ok).map((r) => '• ' + fmtDate(r.date, true) + ': ' + r.error).join('\n') });
+        }
+        return;
+      }
       if (BK.mode === 'admin') {
         args.staffId = $('booking-staff').value;
         if (!args.staffId) { toast('กรุณาเลือกบุคลากร', 'warn'); return; }
@@ -625,6 +778,7 @@
         await loadMyMonth();
         renderCalendar();
         selectDay(date, true);
+        loadUpcoming();
       }
     } catch (e) { toast(e.message, e.code === 'DUPLICATE' || e.code === 'RULE' || e.code === 'CLOSED' ? 'warn' : 'err'); }
   }
@@ -684,6 +838,39 @@
       html += '</ul>';
     }
     return html;
+  }
+
+  /* ---------------- เพิ่มลงปฏิทินมือถือ (.ics) ---------------- */
+  const SLOT_TIME = {
+    '06:00-08:30': ['0600', '0830'], '08:30-12:30': ['0830', '1230'], '12:30-16:30': ['1230', '1630'], '16:30-สิ้นสุด': ['1630', '2030'],
+    '06:00-11:00': ['0600', '1100'], '06:00-12:00': ['0600', '1200'], '06:00-16:00': ['0600', '1600'], '06:00-สิ้นสุด': ['0600', '2030']
+  };
+  function icsTime(date, hhmm) {
+    const p = parts(date);
+    const t = new Date(Date.UTC(p.y, p.m - 1, p.d, +hhmm.slice(0, 2) - 7, +hhmm.slice(2)));
+    return t.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
+  }
+  function exportIcs() {
+    const list = (SUM_DATA && SUM_DATA.bookings) || [];
+    if (!list.length) { toast('ไม่มีเวรให้เพิ่มลงปฏิทิน', 'warn'); return; }
+    const icsEsc = (v) => String(v).replace(/([,;\\])/g, '\\$1');
+    const lines = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//BRSbooking//TH', 'CALSCALE:GREGORIAN', 'METHOD:PUBLISH', 'X-WR-CALNAME:เวรเจาะเลือด'];
+    const stamp = icsTime(S.info.today, '0700');
+    list.forEach((b) => {
+      const times = b.slots.map((x) => SLOT_TIME[x]).filter(Boolean);
+      if (!times.length) return;
+      const start = times.map((t) => t[0]).sort()[0], end = times.map((t) => t[1]).sort().slice(-1)[0];
+      lines.push('BEGIN:VEVENT', 'UID:' + b.id + '@brsbooking', 'DTSTAMP:' + stamp, 'DTSTART:' + icsTime(b.date, start), 'DTEND:' + icsTime(b.date, end),
+        'SUMMARY:' + icsEsc('เวร ' + ROOM_SHORT(b.room) + ' ' + b.slots.join(', ')), 'LOCATION:' + icsEsc(b.room + ' - ' + b.station),
+        'DESCRIPTION:' + icsEsc('ช่วงเวลา ' + b.slots.join(', ') + ' (สิ้นสุดเวลาโดยประมาณ)'), 'BEGIN:VALARM', 'TRIGGER:-PT12H', 'ACTION:DISPLAY', 'DESCRIPTION:' + icsEsc('พรุ่งนี้มีเวร ' + ROOM_SHORT(b.room)), 'END:VALARM', 'END:VEVENT');
+    });
+    lines.push('END:VCALENDAR');
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([lines.join('\r\n')], { type: 'text/calendar;charset=utf-8' }));
+    a.download = 'BRS-my-shifts.ics';
+    document.body.appendChild(a); a.click();
+    setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+    toast('ดาวน์โหลดไฟล์ปฏิทินแล้ว (' + list.length + ' เวร) — เปิดไฟล์เพื่อเพิ่มลงปฏิทินในมือถือ', 'ok');
   }
 
   function printHtml(html) {
@@ -781,6 +968,8 @@
   function switchTab(tab) {
     S.admin.tab = tab;
     document.querySelectorAll('#admin-tabs [data-tab]').forEach((b) => b.classList.toggle('tab-active', b.dataset.tab === tab));
+    document.querySelectorAll('#side-nav [data-tab]').forEach((b) => b.classList.toggle('active', b.dataset.tab === tab));
+    setPage(tab);
     document.querySelectorAll('.admin-pane').forEach((p) => {
       p.hidden = p.dataset.pane !== tab;
       if (!p.hidden) { p.classList.remove('motion-fade-up'); void p.offsetWidth; p.classList.add('motion-fade-up'); }
@@ -1007,6 +1196,7 @@
     $('set-open').checked = st.bookingOpen;
     $('set-holiday-rule').checked = st.holidayAsWeekend;
     $('set-self-pin').checked = st.allowSelfPin;
+    $('set-close-at').value = st.closeAt || '';
     $('set-notice').value = st.notice;
     $('set-contact').value = st.contact;
     S.admin.months = st.bookingMonths.slice();
@@ -1028,7 +1218,7 @@
         settings: {
           BOOKING_OPEN: $('set-open').checked, BOOKING_MONTHS: S.admin.months.join(','),
           NOTICE: $('set-notice').value, CONTACT: $('set-contact').value,
-          SPECIAL_DAY_RULE: $('set-holiday-rule').checked, ALLOW_SELF_PIN: $('set-self-pin').checked
+          SPECIAL_DAY_RULE: $('set-holiday-rule').checked, ALLOW_SELF_PIN: $('set-self-pin').checked, CLOSE_AT: $('set-close-at').value
         }
       }, { btn: $('set-save') });
       S.admin.settings = r.settings; S.info.settings = r.settings;
@@ -1144,6 +1334,8 @@
   }
 
   /* ---------------- bindings ---------------- */
+  function openPinDialog() { $('pin-form').reset(); $('pin-force-note').hidden = true; $('pin-cancel').hidden = false; openDialog('dlg-pin'); }
+
   function bindSwipe(el, onLeft, onRight) {
     let x0 = null, y0 = null;
     el.addEventListener('touchstart', (e) => { const t = e.changedTouches[0]; x0 = t.clientX; y0 = t.clientY; }, { passive: true });
@@ -1185,12 +1377,15 @@
     $('cal-prev').onclick = () => changeMonth(-1);
     $('cal-next').onclick = () => changeMonth(1);
     bindSwipe($('calendar'), () => changeMonth(1), () => changeMonth(-1));
-    $('calendar').addEventListener('click', (e) => { const d = e.target.closest('.cal-day'); if (d && d.dataset.date) selectDay(d.dataset.date); });
-    $('btn-summary').onclick = () => openSummary('month');
+    $('calendar').addEventListener('click', (e) => { const d = e.target.closest('.cal-day'); if (!d || !d.dataset.date) return; if (S.multi) togglePick(d.dataset.date); else selectDay(d.dataset.date); });
+    $('multi-toggle').addEventListener('change', (e) => setMulti(e.target.checked));
+    $('theme-btn').onclick = cycleTheme;
+    $('btn-summary-m').onclick = () => openSummary('month');
+    $('summary-ics').onclick = exportIcs;
+    $('set-close-clear').onclick = () => { $('set-close-at').value = ''; };
     $('summary-seg').addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) openSummary(b.dataset.mode); });
     $('summary-print').onclick = () => printHtml(summaryHtml(SUM_DATA, true));
-    const openPin = () => { $('pin-form').reset(); $('pin-force-note').hidden = true; $('pin-cancel').hidden = false; openDialog('dlg-pin'); };
-    $('btn-change-pin').onclick = openPin;
+    const openPin = openPinDialog;
     $('pin-form').addEventListener('submit', changePin);
     $('dock-calendar').onclick = () => window.scrollTo({ top: 0, behavior: 'smooth' });
     $('dock-summary').onclick = () => openSummary('month');

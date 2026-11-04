@@ -12,24 +12,39 @@
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="preload" href="fonts/sarabun-thai-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <script src="theme.js"></script>
   <link rel="stylesheet" href="app.css">
 </head>
 <body class="min-h-dvh bg-base-200 text-base-content">
   <div class="progress-line" aria-hidden="true"></div>
 
+  <!-- ===== Sidebar (PC) ===== -->
+  <aside id="sidebar" class="fixed inset-y-0 left-0 z-50 w-[16.5rem] flex-col bg-base-100 border-r border-base-300 no-print">
+    <div class="flex items-center gap-3 px-5 h-16 border-b border-base-300">
+      <span class="icon-tile bg-primary text-primary-content shadow-sm"><i data-lucide="droplet"></i></span>
+      <div class="min-w-0 leading-tight"><div class="font-bold">จองเวร BRS</div><div class="text-xs opacity-60 truncate">หน่วยเจาะเลือดฯ และ POCT</div></div>
+    </div>
+    <div class="px-3 pt-4 pb-1 text-xs font-semibold uppercase tracking-wide opacity-50" id="side-label">เมนู</div>
+    <ul class="menu w-full px-3 gap-1" id="side-nav"></ul>
+    <div class="mt-auto p-3 border-t border-base-300" id="side-foot"></div>
+  </aside>
+
+  <div id="content">
   <!-- ===== Navbar ===== -->
   <header class="navbar sticky top-0 z-40 bg-base-100/95 backdrop-blur border-b border-base-300 px-3 lg:px-6 min-h-16 no-print">
-    <div class="flex-1 min-w-0 flex items-center gap-3">
+    <div class="flex-1 min-w-0 items-center gap-3 hidden" id="page-title"><span class="icon-tile icon-tile-sm bg-primary/10 text-primary" id="page-icon"><i data-lucide="calendar-days"></i></span><div class="min-w-0"><div class="font-bold text-lg leading-tight truncate" id="page-name"></div><div class="text-xs opacity-60 truncate" id="page-sub"></div></div></div>
+    <div class="flex-1 min-w-0 flex items-center gap-3 brand-top">
       <span class="icon-tile bg-primary text-primary-content shadow-sm"><i data-lucide="droplet"></i></span>
       <div class="min-w-0">
         <div class="font-bold leading-tight truncate text-sm sm:text-base" id="app-title">ระบบจองเวรหน่วยเจาะเลือดเก็บสิ่งส่งตรวจและPOCT</div>
         <div class="text-xs opacity-70 truncate hidden sm:block" id="app-org">งานห้องปฏิบัติการเวชศาสตร์ชันสูตร โรงพยาบาลศรีนครินทร์</div>
       </div>
     </div>
-    <div class="flex-none flex items-center gap-2" id="topbar-actions"></div>
+    <div class="flex-none flex items-center gap-1">
+      <button class="btn btn-ghost btn-sm btn-square" id="theme-btn" type="button" aria-label="สลับธีม" title="สลับธีม สว่าง / มืด / ตามเครื่อง"><i data-lucide="sun" class="w-5 h-5 text-warning"></i></button>
+      <div class="flex items-center gap-2" id="topbar-actions"></div>
+    </div>
   </header>
 
   <main id="main" class="w-full no-print">
@@ -82,19 +97,20 @@
                 <legend class="fieldset-legend">PIN</legend>
                 <label class="input w-full">
                   <i data-lucide="key-round" class="w-4 h-4 text-warning"></i>
-                  <input id="login-pin" type="password" inputmode="numeric" maxlength="6" autocomplete="current-password" class="grow tracking-[.4em]" placeholder="ตัวเลข 4–6 หลัก">
+                  <input id="login-pin" type="password" inputmode="numeric" maxlength="6" autocomplete="current-password" class="grow tracking-[.4em] placeholder:tracking-normal" placeholder="ตัวเลข 4–6 หลัก">
                 </label>
               </fieldset>
               <button class="btn btn-primary btn-block" id="btn-login"><i data-lucide="log-in" class="w-4 h-4"></i>เข้าสู่ระบบ</button>
+              <p class="text-xs opacity-70 text-center flex items-center justify-center gap-1" id="forgot-pin"><i data-lucide="circle-help" class="w-3.5 h-3.5 text-info"></i>ลืม PIN? ติดต่อผู้ดูแลเพื่อรีเซ็ต <span id="forgot-contact"></span></p>
             </div>
 
             <div id="pin-setup-block" class="flex flex-col gap-3" hidden>
               <div role="alert" class="alert alert-soft alert-info"><i data-lucide="sparkles" class="w-5 h-5 text-info"></i><span>ครั้งแรกที่ใช้งาน กรุณาตั้ง PIN ตัวเลข 4–6 หลัก (ห้ามใช้เลขเรียงหรือเลขซ้ำ เช่น 1234, 0000)</span></div>
               <fieldset class="fieldset">
                 <legend class="fieldset-legend">ตั้ง PIN</legend>
-                <label class="input w-full"><i data-lucide="key-round" class="w-4 h-4 text-warning"></i><input id="setup-pin" type="password" inputmode="numeric" maxlength="6" autocomplete="new-password" class="grow tracking-[.4em]"></label>
+                <label class="input w-full"><i data-lucide="key-round" class="w-4 h-4 text-warning"></i><input id="setup-pin" type="password" inputmode="numeric" maxlength="6" autocomplete="new-password" class="grow tracking-[.4em] placeholder:tracking-normal"></label>
                 <legend class="fieldset-legend">ยืนยัน PIN</legend>
-                <label class="input w-full"><i data-lucide="key-round" class="w-4 h-4 text-warning"></i><input id="setup-pin2" type="password" inputmode="numeric" maxlength="6" autocomplete="new-password" class="grow tracking-[.4em]"></label>
+                <label class="input w-full"><i data-lucide="key-round" class="w-4 h-4 text-warning"></i><input id="setup-pin2" type="password" inputmode="numeric" maxlength="6" autocomplete="new-password" class="grow tracking-[.4em] placeholder:tracking-normal"></label>
               </fieldset>
               <button class="btn btn-primary btn-block" id="btn-setpin"><i data-lucide="badge-check" class="w-4 h-4"></i>ตั้ง PIN และเข้าสู่ระบบ</button>
             </div>
@@ -112,21 +128,19 @@
 
     <!-- ===== User ===== -->
     <section id="view-user" class="view has-dock px-3 py-4 lg:px-6 lg:py-6" hidden>
-      <div class="card bg-base-100 shadow-sm mb-4 motion-fade-up">
-        <div class="card-body flex-row flex-wrap items-center gap-4 p-4 lg:p-5">
-          <span class="icon-tile bg-primary/15 text-primary"><i data-lucide="circle-user-round"></i></span>
-          <div class="min-w-0 flex-1">
-            <div class="font-bold text-lg truncate" id="hello"></div>
-            <div class="text-sm opacity-70 truncate" id="user-position"></div>
-          </div>
-          <div class="hidden lg:flex gap-2">
-            <button class="btn btn-success btn-soft" id="btn-summary"><i data-lucide="list-checks" class="w-4 h-4"></i>สรุปเวรของฉัน</button>
-            <button class="btn btn-ghost" id="btn-change-pin"><i data-lucide="key-round" class="w-4 h-4 text-warning"></i>เปลี่ยน PIN</button>
-          </div>
+      <div class="flex flex-wrap items-end justify-between gap-2 mb-4 motion-fade-up">
+        <div class="min-w-0">
+          <div class="text-sm opacity-70" id="greet-time">สวัสดี</div>
+          <h1 class="text-2xl font-bold leading-tight truncate" id="hello"></h1>
+          <div class="text-sm opacity-70 truncate" id="user-position"></div>
+        </div>
+        <div class="flex gap-2 lg:hidden">
+          <button class="btn btn-success btn-soft" id="btn-summary-m"><i data-lucide="list-checks" class="w-4 h-4"></i>สรุปเวร</button>
         </div>
       </div>
+      <div class="grid gap-3 sm:grid-cols-3 mb-4" id="kpis"></div>
 
-      <div class="grid gap-4 lg:grid-cols-[minmax(0,1fr)_380px] xl:grid-cols-[minmax(0,1fr)_440px] items-start">
+      <div class="grid gap-4 lg:grid-cols-[minmax(0,1fr)_360px] xl:grid-cols-[minmax(0,1fr)_420px] 2xl:grid-cols-[minmax(0,1fr)_480px] items-start">
         <div class="card bg-base-100 shadow-sm motion-fade-up" style="--i:1">
           <div class="card-body p-3 sm:p-5">
             <div class="flex items-center justify-between gap-2">
@@ -137,7 +151,11 @@
               </div>
               <button class="btn btn-circle btn-ghost" id="cal-next" aria-label="เดือนถัดไป"><i data-lucide="chevron-right" class="text-primary"></i></button>
             </div>
-            <div class="mt-3">
+            <div class="flex flex-wrap items-center justify-between gap-2 mt-3">
+              <span class="text-xs opacity-70" id="multi-hint">แตะวันที่เพื่อดูหรือจองเวร</span>
+              <label class="label cursor-pointer gap-2 text-sm"><input type="checkbox" class="toggle toggle-accent toggle-sm" id="multi-toggle"><span class="text-base-content">เลือกหลายวัน</span></label>
+            </div>
+            <div class="mt-2">
               <div class="cal-dow"><div class="text-error">อา</div><div>จ</div><div>อ</div><div>พ</div><div>พฤ</div><div>ศ</div><div class="text-warning">ส</div></div>
               <div class="cal-grid" id="calendar"></div>
             </div>
@@ -167,7 +185,7 @@
 
     <!-- ===== Admin ===== -->
     <section id="view-admin" class="view px-3 py-4 lg:px-6 lg:py-6" hidden>
-      <div role="tablist" class="tabs tabs-box bg-base-100 shadow-sm mb-4 overflow-x-auto flex-nowrap motion-fade-up" id="admin-tabs">
+      <div role="tablist" class="tabs tabs-box bg-base-100 shadow-sm mb-4 overflow-x-auto flex-nowrap motion-fade-up lg:hidden" id="admin-tabs">
         <button role="tab" class="tab tab-active gap-2 whitespace-nowrap" data-tab="roster"><i data-lucide="calendar-range" class="w-4 h-4 text-primary"></i>ตารางเวร</button>
         <button role="tab" class="tab gap-2 whitespace-nowrap" data-tab="staff"><i data-lucide="users" class="w-4 h-4 text-info"></i>บุคลากร <span class="badge badge-warning badge-sm" id="pending-badge" hidden></span></button>
         <button role="tab" class="tab gap-2 whitespace-nowrap" data-tab="holidays"><i data-lucide="party-popper" class="w-4 h-4 text-holiday"></i>วันหยุด</button>
@@ -263,6 +281,11 @@
                 </div>
                 <div class="flex flex-wrap gap-2 mt-2" id="set-months"></div>
               </div>
+              <div>
+                <div class="font-semibold mb-1">วันสุดท้ายที่รับจอง (ปิดรับอัตโนมัติ)</div>
+                <p class="text-sm opacity-70 mb-2">หลังวันนี้ระบบปิดรับจองเองโดยไม่ต้องกดปิด และแสดงการนับถอยหลังให้บุคลากรเห็น (ว่าง = ไม่กำหนด)</p>
+                <div class="join w-full max-w-md"><input class="input join-item w-full" type="date" id="set-close-at" aria-label="วันสุดท้ายที่รับจอง"><button class="btn join-item" id="set-close-clear" type="button"><i data-lucide="x" class="w-4 h-4 text-error"></i>ล้าง</button></div>
+              </div>
               <label class="label cursor-pointer justify-start gap-3 whitespace-normal"><input type="checkbox" class="toggle toggle-warning" id="set-holiday-rule"><span class="text-base-content">วันหยุดราชการใช้ช่วงเวลาแบบเสาร์-อาทิตย์ (จองได้ 1 เวร)</span></label>
             </div>
           </div>
@@ -285,6 +308,7 @@
 
     <footer class="text-center text-xs opacity-60 py-6 no-print" id="credit">พัฒนาโดย ทนพญ. มุกดารัตน์ สุพัฒน์</footer>
   </main>
+  </div>
 
   <!-- ===== Dialogs (มือถือเป็น bottom sheet) ===== -->
   <dialog id="dlg-booking" class="modal modal-bottom sm:modal-middle">
@@ -326,6 +350,7 @@
       </div>
       <div id="summary-content" class="mt-3"></div>
       <div class="modal-actions-sticky">
+        <button type="button" class="btn btn-accent btn-soft" id="summary-ics"><i data-lucide="calendar-plus" class="w-4 h-4"></i>เพิ่มลงปฏิทินมือถือ</button>
         <button type="button" class="btn btn-info btn-soft" id="summary-print"><i data-lucide="printer" class="w-4 h-4"></i>พิมพ์ / PDF</button>
         <button type="button" class="btn btn-primary" data-close><i data-lucide="check" class="w-4 h-4"></i>ปิด</button>
       </div>
@@ -341,8 +366,8 @@
         <legend class="fieldset-legend">ชื่อ</legend><input class="input w-full" id="req-first" required maxlength="60">
         <legend class="fieldset-legend">นามสกุล</legend><input class="input w-full" id="req-last" required maxlength="60">
         <legend class="fieldset-legend">ตำแหน่ง</legend><select class="select w-full" id="req-position" required></select>
-        <legend class="fieldset-legend">ตั้ง PIN (ตัวเลข 4–6 หลัก)</legend><input class="input w-full tracking-[.4em]" id="req-pin" type="password" inputmode="numeric" maxlength="6" required autocomplete="new-password">
-        <legend class="fieldset-legend">ยืนยัน PIN</legend><input class="input w-full tracking-[.4em]" id="req-pin2" type="password" inputmode="numeric" maxlength="6" required autocomplete="new-password">
+        <legend class="fieldset-legend">ตั้ง PIN (ตัวเลข 4–6 หลัก)</legend><input class="input w-full tracking-[.4em] placeholder:tracking-normal" id="req-pin" type="password" inputmode="numeric" maxlength="6" required autocomplete="new-password">
+        <legend class="fieldset-legend">ยืนยัน PIN</legend><input class="input w-full tracking-[.4em] placeholder:tracking-normal" id="req-pin2" type="password" inputmode="numeric" maxlength="6" required autocomplete="new-password">
       </fieldset>
       <div class="modal-actions-sticky">
         <button type="button" class="btn btn-ghost" data-close>ยกเลิก</button>
@@ -374,9 +399,9 @@
       <h3 class="font-bold text-lg flex items-center gap-2"><span class="icon-tile icon-tile-sm bg-warning/15 text-warning"><i data-lucide="key-round"></i></span>เปลี่ยน PIN</h3>
       <div role="alert" class="alert alert-soft alert-warning mt-3" id="pin-force-note" hidden><i data-lucide="triangle-alert" class="w-5 h-5"></i><span>คุณกำลังใช้ PIN ชั่วคราวจากผู้ดูแล กรุณาตั้ง PIN ใหม่ก่อนใช้งาน</span></div>
       <fieldset class="fieldset">
-        <legend class="fieldset-legend">PIN เดิม</legend><input class="input w-full tracking-[.4em]" id="pin-old" type="password" inputmode="numeric" maxlength="6" required autocomplete="current-password">
-        <legend class="fieldset-legend">PIN ใหม่</legend><input class="input w-full tracking-[.4em]" id="pin-new" type="password" inputmode="numeric" maxlength="6" required autocomplete="new-password">
-        <legend class="fieldset-legend">ยืนยัน PIN ใหม่</legend><input class="input w-full tracking-[.4em]" id="pin-new2" type="password" inputmode="numeric" maxlength="6" required autocomplete="new-password">
+        <legend class="fieldset-legend">PIN เดิม</legend><input class="input w-full tracking-[.4em] placeholder:tracking-normal" id="pin-old" type="password" inputmode="numeric" maxlength="6" required autocomplete="current-password">
+        <legend class="fieldset-legend">PIN ใหม่</legend><input class="input w-full tracking-[.4em] placeholder:tracking-normal" id="pin-new" type="password" inputmode="numeric" maxlength="6" required autocomplete="new-password">
+        <legend class="fieldset-legend">ยืนยัน PIN ใหม่</legend><input class="input w-full tracking-[.4em] placeholder:tracking-normal" id="pin-new2" type="password" inputmode="numeric" maxlength="6" required autocomplete="new-password">
       </fieldset>
       <div class="modal-actions-sticky">
         <button type="button" class="btn btn-ghost" data-close id="pin-cancel">ยกเลิก</button>

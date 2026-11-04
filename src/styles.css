@@ -4,19 +4,50 @@
 @source "../public/app.js";
 
 @plugin "daisyui" {
-  themes: corporate --default, business --prefersdark;
+  themes: corporate --default, business;
 }
+
+/* ฟอนต์ Sarabun เก็บในเว็บเอง (ไม่ต้องโหลดจาก Google) */
+@font-face { font-family: "Sarabun"; font-style: normal; font-weight: 400; font-display: swap; src: url("fonts/sarabun-thai-400-normal.woff2") format("woff2"); unicode-range: U+02D7, U+0303, U+0331, U+0E01-0E5B, U+200C-200D, U+25CC; }
+@font-face { font-family: "Sarabun"; font-style: normal; font-weight: 400; font-display: swap; src: url("fonts/sarabun-latin-400-normal.woff2") format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: "Sarabun"; font-style: normal; font-weight: 500; font-display: swap; src: url("fonts/sarabun-thai-500-normal.woff2") format("woff2"); unicode-range: U+02D7, U+0303, U+0331, U+0E01-0E5B, U+200C-200D, U+25CC; }
+@font-face { font-family: "Sarabun"; font-style: normal; font-weight: 500; font-display: swap; src: url("fonts/sarabun-latin-500-normal.woff2") format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: "Sarabun"; font-style: normal; font-weight: 600; font-display: swap; src: url("fonts/sarabun-thai-600-normal.woff2") format("woff2"); unicode-range: U+02D7, U+0303, U+0331, U+0E01-0E5B, U+200C-200D, U+25CC; }
+@font-face { font-family: "Sarabun"; font-style: normal; font-weight: 600; font-display: swap; src: url("fonts/sarabun-latin-600-normal.woff2") format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: "Sarabun"; font-style: normal; font-weight: 700; font-display: swap; src: url("fonts/sarabun-thai-700-normal.woff2") format("woff2"); unicode-range: U+02D7, U+0303, U+0331, U+0E01-0E5B, U+200C-200D, U+25CC; }
+@font-face { font-family: "Sarabun"; font-style: normal; font-weight: 700; font-display: swap; src: url("fonts/sarabun-latin-700-normal.woff2") format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
 
 @theme {
   --font-sans: "Sarabun", ui-sans-serif, system-ui, sans-serif;
 }
 
-/* ---------- พื้นฐาน ---------- */
+/* ---------- พื้นฐาน + ขนาดตัวอักษรตามจอ ---------- */
+html { font-size: 16px; }
+@media (min-width: 1280px) { html { font-size: 16.5px; } }
+@media (min-width: 1600px) { html { font-size: 17.5px; } }
+@media (min-width: 2200px) { html { font-size: 19px; } }
 html, body { overflow-x: hidden; }
+body { line-height: 1.6; }
+h1, h2, h3, .card-title { letter-spacing: -0.005em; }
+/* app shell: แถบเมนูด้านซ้ายบน PC */
+#sidebar { display: none; }
+@media (min-width: 1024px) {
+  body.has-sidebar #sidebar { display: flex; }
+  body.has-sidebar #content { padding-left: 16.5rem; }
+  body.has-sidebar .brand-top { display: none; }
+  body.has-sidebar #page-title { display: flex; }
+}
+#page-title { display: none; }
+.side-link.active { background: color-mix(in oklab, var(--color-primary) 12%, transparent); color: var(--color-primary); font-weight: 600; }
+.kpi { border: 1px solid var(--color-base-300); min-width: 0; }
+#kpis > *, #view-user .card, #view-admin .card { min-width: 0; }
+.kpi .card-body { min-width: 0; }
+.cal-day.is-picked { box-shadow: 0 0 0 3px var(--color-accent); border-color: var(--color-accent); }
+.cal-day.is-picked::after { content: "✓"; position: absolute; top: 4px; right: 6px; font-weight: 700; color: var(--color-accent); }
 body { font-family: var(--font-sans); -webkit-tap-highlight-color: transparent; }
 [hidden] { display: none !important; }
 :root { --nav-h: 64px; --holiday: oklch(64% 0.19 45); --holiday-ink: oklch(50% 0.17 40); }
-@media (prefers-color-scheme: dark) { :root { --holiday-ink: oklch(78% 0.14 55); } }
+[data-theme="business"] { --holiday-ink: oklch(78% 0.14 55); }
 .text-holiday { color: var(--holiday-ink); }
 .bg-holiday-soft { background: color-mix(in oklab, var(--holiday) 16%, transparent); }
 .badge-holiday { background: color-mix(in oklab, var(--holiday) 16%, transparent); color: var(--holiday-ink); border-color: transparent; }
@@ -103,7 +134,7 @@ body[data-loading] .progress-line { opacity: 1; }
 }
 
 /* ---------- ฟอร์ม/มือถือ ---------- */
-@media (pointer: coarse) {
+@media (pointer: coarse), (max-width: 1023px) {
   .btn-sm { min-height: 2.5rem; height: auto; }
   .btn-xs { min-height: 2.25rem; height: auto; }
 }

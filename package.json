@@ -10,6 +10,7 @@
     "vendor": "cp node_modules/lucide/dist/umd/lucide.min.js node_modules/xlsx/dist/xlsx.full.min.js public/vendor/"
   },
   "devDependencies": {
+    "@fontsource/sarabun": "^5.3.0",
     "@tailwindcss/cli": "^4.3.4",
     "daisyui": "^5.7.50",
     "lucide": "^0.577.0",

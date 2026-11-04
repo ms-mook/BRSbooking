@@ -430,3 +430,46 @@ test('[R11] ข้อมูลรูปแบบจริง: วันหยุ
   ok(gas.call('saveBooking', { token: t, id: r.id, date: '2026-12-10', room: 'ห้องเจาะเลือด SMC', station: 'จุดเจาะเลือด', slots: ['06:00-08:30', '08:30-12:30'] }));
   ok(gas.call('cancelBooking', { token: t, id: r.id }));
 });
+
+test('[R18] จองหลายวันพร้อมกัน: บันทึกวันที่ผ่าน แจ้งวันที่ไม่ผ่านพร้อมเหตุผล', () => {
+  const gas = fresh();
+  const t = loginAs(gas, 'สมชาย');
+  const base = { token: t, room: 'ห้องเจาะเลือด SMC', station: 'จุดเจาะเลือด', slots: ['06:00-08:30'] };
+  err(gas.call('saveBookings', Object.assign({ dates: [] }, base)), 'BAD_REQUEST');
+  err(gas.call('saveBookings', Object.assign({ dates: Array.from({ length: 32 }, (_, i) => '2026-12-' + String((i % 28) + 1).padStart(2, '0')) }, base)), 'BAD_REQUEST');
+  // 3 พ.ย. ผ่านมาแล้ว, 2 พ.ย. ซ้ำช่วงเช้า+อดีต, 14 พ.ย. เสาร์ใช้ช่วงวันธรรมดาไม่ได้, 16-18 พ.ย. ผ่าน (18 ส่งซ้ำ)
+  const r = ok(gas.call('saveBookings', Object.assign({ dates: ['2026-11-18', '2026-11-03', '2026-11-16', '2026-11-14', '2026-11-17', '2026-11-18'] }, base)));
+  assert.equal(r.saved, 3);
+  assert.equal(r.failed, 2);
+  assert.deepEqual(r.results.map((x) => [x.date, x.ok, x.code || '']), [
+    ['2026-11-03', false, 'CLOSED'], ['2026-11-14', false, 'BAD_REQUEST'], ['2026-11-16', true, ''], ['2026-11-17', true, ''], ['2026-11-18', true, '']
+  ]);
+  const again = ok(gas.call('saveBookings', Object.assign({ dates: ['2026-11-16', '2026-11-19'] }, base)));
+  assert.deepEqual(again.results.map((x) => x.code || 'OK'), ['DUPLICATE', 'OK'], 'กันจองซ้ำกับรายการที่มีอยู่');
+  const rows = gas.values('Booking Data').filter((x) => x[2] === 'สมชาย' && x[5] === 'ห้องเจาะเลือด SMC');
+  assert.equal(rows.length, 4);
+  assert.ok(rows.every((x) => /^B[0-9a-f]{12}$/.test(x[12]) && x[7] === '06:00-08:30'));
+  err(gas.call('saveBookings', Object.assign({}, base, { token: 'bad', dates: ['2026-11-20'] })), 'SESSION');
+});
+
+test('[R19] วันปิดรับจองอัตโนมัติ (CLOSE_AT)', () => {
+  const gas = fresh();
+  const at = admin(gas);
+  err(gas.call('adminSaveSettings', { token: at, settings: { BOOKING_OPEN: true, CLOSE_AT: '26/11/2026' } }), 'BAD_REQUEST');
+  const st = ok(gas.call('adminSaveSettings', { token: at, settings: { BOOKING_OPEN: true, CLOSE_AT: '2026-11-05' } })).settings;
+  assert.equal(st.closeAt, '2026-11-05');
+  assert.equal(ok(gas.call('getPublicInfo')).settings.closeAt, '2026-11-05');
+  gas.setNow('2026-11-05T20:00:00+07:00');
+  const t = loginAs(gas, 'สมชาย');
+  const b = { token: t, room: 'ห้องเจาะเลือด SMC', station: 'จุดเจาะเลือด', slots: ['06:00-08:30'] };
+  ok(gas.call('saveBooking', Object.assign({ date: '2026-12-01' }, b)), 'ก่อนวันปิด จองได้');
+  gas.setNow('2026-11-05T23:59:00+07:00');
+  ok(gas.call('saveBooking', Object.assign({ date: '2026-12-02' }, b)), 'วันปิดรับยังจองได้ถึงสิ้นวัน');
+  gas.setNow('2026-11-06T00:01:00+07:00');
+  const t2 = loginAs(gas, 'มานะ');
+  err(gas.call('saveBooking', { token: t2, date: '2026-12-03', room: 'ห้องเจาะเลือด SMC', station: 'จุดเจาะเลือด', slots: ['06:00-08:30'] }), 'CLOSED');
+  const mine = ok(gas.call('getMyBookings', { token: t, month: '2026-12' })).bookings[0];
+  err(gas.call('cancelBooking', { token: t, id: mine.id }), 'NEED_REASON');
+  ok(gas.call('adminSaveSettings', { token: admin(gas), settings: { BOOKING_OPEN: true, CLOSE_AT: '' } }));
+  ok(gas.call('saveBooking', { token: t2, date: '2026-12-03', room: 'ห้องเจาะเลือด SMC', station: 'จุดเจาะเลือด', slots: ['06:00-08:30'] }));
+});

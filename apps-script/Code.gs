@@ -64,6 +64,7 @@ const CONFIG = {
     ['NOTICE', 'บุคลากรทุกท่านจองเวลาปฏิบัติงานผ่านเอกสารอิเล็กทรอนิกส์ ส่งภายในวันที่ 26 ของทุกเดือน (หรือจนกว่าจะปิดรับ) เพื่อให้หัวหน้าหน่วยฯหรือผู้รับผิดชอบจัดทำตารางเวรให้เรียบร้อยและจัดสรรจุดปฏิบัติงานได้ทันเวลา', 'ข้อความประกาศท้ายหน้าเว็บ'],
     ['CONTACT', '63662/67204', 'เบอร์ติดต่อ'],
     ['SPECIAL_DAY_RULE', 'FALSE', 'วันหยุดราชการใช้ช่วงเวลาแบบวันเสาร์-อาทิตย์ (TRUE/FALSE) — ข้อมูลเดิมจองแบบวันธรรมดา จึงปิดไว้'],
+    ['CLOSE_AT', '', 'วันสุดท้ายที่รับจอง (yyyy-MM-dd) หลังวันนี้ปิดรับอัตโนมัติ (ว่าง = ไม่กำหนด)'],
     ['ALLOW_SELF_PIN', 'TRUE', 'ให้บุคลากรตั้ง PIN ครั้งแรกเอง (TRUE/FALSE) — ปิดเมื่อทุกคนตั้ง PIN แล้ว เพื่อกันคนอื่นตั้ง PIN แทน']
   ],
   // วันหยุดตั้งต้น (แก้ไขได้ในหน้าผู้ดูแล)
@@ -109,6 +110,7 @@ const API_ = {
   logout: logout_,
   getMyBookings: getMyBookings_,
   saveBooking: saveBooking_,
+  saveBookings: saveBookings_,
   cancelBooking: cancelBooking_,
   adminLogin: adminLogin_,
   adminGetMonth: adminGetMonth_,
@@ -280,6 +282,37 @@ function saveBooking_(a) {
   });
 }
 
+/** จองหลายวันพร้อมกัน (ห้อง/จุด/ช่วงเวลาเดียวกัน) — ตรวจกติกาทีละวัน บันทึกเฉพาะวันที่ผ่าน */
+function saveBookings_(a) {
+  const staff = requireUser_(a.token);
+  if (!Array.isArray(a.dates) || !a.dates.length) throw appError_('กรุณาเลือกวันที่อย่างน้อย 1 วัน', 'BAD_REQUEST');
+  if (a.dates.length > 31) throw appError_('เลือกได้ไม่เกิน 31 วันต่อครั้ง', 'BAD_REQUEST');
+  const settings = readSettings_();
+  const dates = [];
+  a.dates.forEach(function (d) { const k = validDate_(d); if (dates.indexOf(k) < 0) dates.push(k); });
+  dates.sort();
+  return withLock_(function () {
+    const all = readBookings_();
+    const results = [];
+    dates.forEach(function (date) {
+      try {
+        const input = validBookingInput_({ date: date, room: a.room, station: a.station, slots: a.slots });
+        checkUserCanChange_(date, settings, 'จอง');
+        checkDuplicate_(all, staff.key, input, null, settings);
+        const row = bookingRow_(input, staff, newId_('B'));
+        writeBooking_(row, null);
+        all.push({ id: row[12], key: staff.key, date: date, slots: input.slots });
+        results.push({ date: date, ok: true });
+      } catch (err) {
+        if (!err.code) throw err;
+        results.push({ date: date, ok: false, error: err.message, code: err.code });
+      }
+    });
+    const ok = results.filter(function (r) { return r.ok; }).length;
+    return { results: results, saved: ok, failed: results.length - ok, message: 'บันทึกการจอง ' + ok + ' วัน' + (results.length - ok ? ' (ไม่สำเร็จ ' + (results.length - ok) + ' วัน)' : '') };
+  });
+}
+
 function cancelBooking_(a) {
   const staff = requireUser_(a.token);
   const settings = readSettings_();
@@ -443,6 +476,7 @@ function adminSaveSettings_(a) {
     NOTICE: safeCell_(cleanText_(s.NOTICE, 1000)),
     CONTACT: safeCell_(cleanText_(s.CONTACT, 100)),
     SPECIAL_DAY_RULE: s.SPECIAL_DAY_RULE === true || s.SPECIAL_DAY_RULE === 'TRUE' ? 'TRUE' : 'FALSE',
+    CLOSE_AT: s.CLOSE_AT ? validDate_(s.CLOSE_AT) : '',
     ALLOW_SELF_PIN: s.ALLOW_SELF_PIN === false || s.ALLOW_SELF_PIN === 'FALSE' ? 'FALSE' : 'TRUE'
   };
   return withLock_(function () {
@@ -502,6 +536,7 @@ function isSpecialDay_(date, holidays, settings) {
 
 function isMonthOpen_(date, settings) {
   if (settings.BOOKING_OPEN !== 'TRUE') return false;
+  if (settings.CLOSE_AT && todayKey_() > settings.CLOSE_AT) return false;
   const months = str_(settings.BOOKING_MONTHS).split(',').map(function (m) { return m.trim(); }).filter(String);
   return !months.length || months.indexOf(date.slice(0, 7)) >= 0;
 }
@@ -750,11 +785,13 @@ function readSettings_() {
   CONFIG.DEFAULT_SETTINGS.forEach(function (d) { s[d[0]] = d[1]; });
   const data = sheet_(CONFIG.SHEETS.SETTINGS).getDataRange().getValues();
   for (let i = 1; i < data.length; i++) {
-    if (data[i][0]) s[String(data[i][0])] = typeof data[i][1] === 'boolean' ? (data[i][1] ? 'TRUE' : 'FALSE') : String(data[i][1]);
+    const v = data[i][1];
+    if (data[i][0]) s[String(data[i][0])] = typeof v === 'boolean' ? (v ? 'TRUE' : 'FALSE') : v instanceof Date ? dateKey_(v) : String(v);
   }
   s.BOOKING_OPEN = String(s.BOOKING_OPEN).toUpperCase() === 'TRUE' ? 'TRUE' : 'FALSE';
   s.SPECIAL_DAY_RULE = String(s.SPECIAL_DAY_RULE).toUpperCase() === 'TRUE' ? 'TRUE' : 'FALSE';
   s.ALLOW_SELF_PIN = String(s.ALLOW_SELF_PIN).toUpperCase() === 'FALSE' ? 'FALSE' : 'TRUE';
+  s.CLOSE_AT = dateKey_(s.CLOSE_AT) || '';
   return s;
 }
 
@@ -765,7 +802,8 @@ function publicSettings_(s) {
     notice: s.NOTICE || '',
     contact: s.CONTACT || '',
     holidayAsWeekend: s.SPECIAL_DAY_RULE === 'TRUE',
-    allowSelfPin: s.ALLOW_SELF_PIN === 'TRUE'
+    allowSelfPin: s.ALLOW_SELF_PIN === 'TRUE',
+    closeAt: s.CLOSE_AT || ''
   };
 }
 
