@@ -298,7 +298,7 @@
     if (shell) { renderSidebar(name); setPage(name === 'user' ? 'user' : S.admin.tab); }
     if (name === 'admin') act.innerHTML = '<span class="badge badge-secondary badge-soft gap-1 hidden sm:inline-flex">' + ic('shield-check', 'w-3.5 h-3.5') + 'ผู้ดูแลระบบ</span><button class="btn btn-ghost btn-sm" id="btn-admin-logout" aria-label="ออกจากระบบผู้ดูแล">' + ic('log-out', 'w-4 h-4 text-error') + '<span class="hidden sm:inline">ออกจากระบบ</span></button>';
     const alo = $('btn-admin-logout'); if (alo) alo.onclick = adminLogout;
-    if (name === 'login') resetLogin();
+    if (name === 'login') { resetLogin(); setLoginMode('staff', false); }
     window.scrollTo(0, 0);
   }
 
@@ -309,7 +309,8 @@
       : '';
     $('forgot-contact').textContent = st.contact ? 'โทร ' + st.contact : '';
     $('default-pin-text').textContent = st.defaultPin || '1234';
-    $('notice-login').innerHTML = html;
+    $('notice-login').innerHTML = st.notice ? '<p>' + esc(st.notice) + '</p>' + (st.contact ? '<p class="login-contact">' + ic('phone', 'w-4 h-4 text-success') + 'ติดต่อ ' + esc(st.contact) + '</p>' : '') : '';
+    renderLoginDay();
     $('notice-user').innerHTML = html;
   }
 
@@ -357,6 +358,41 @@
   }
 
   /* ---------------- login ---------------- */
+  function renderLoginDay() {
+    const t = S.info.today, p = parts(t), st = S.info.settings;
+    $('login-dow').textContent = 'วัน' + DOW[dow(t)];
+    $('login-dm').textContent = p.d + ' ' + MONTHS[p.m - 1];
+    $('login-year').textContent = 'พ.ศ. ' + (p.y + 543);
+    const r = $('login-round');
+    const closed = !st.bookingOpen || (st.closeAt && t > st.closeAt);
+    let txt, tone = 'open';
+    if (closed) { txt = 'ตอนนี้ปิดรับจองเวร'; tone = 'closed'; }
+    else {
+      const months = st.bookingMonths.length ? 'เดือน' + st.bookingMonths.map(monthLabel).join(', ') : 'ทุกเดือนตั้งแต่วันนี้';
+      txt = 'เปิดรับจอง' + months;
+      if (st.closeAt) {
+        const left = Math.round((Date.UTC(...st.closeAt.split('-').map((x, i) => i === 1 ? x - 1 : +x)) - Date.UTC(p.y, p.m - 1, p.d)) / 86400000);
+        txt += left === 0 ? ' ปิดรับวันนี้' : ' ปิดรับ ' + fmtDate(st.closeAt) + ' (อีก ' + left + ' วัน)';
+        if (left <= 3) tone = 'soon';
+      }
+    }
+    r.dataset.tone = tone;
+    r.textContent = txt;
+  }
+
+  function renderPinCells() {
+    const n = $('login-pin').value.length;
+    document.querySelectorAll('#pin-field .pin-cells span').forEach((c, i) => c.classList.toggle('on', i < n));
+  }
+
+  function setLoginMode(mode, focus) {
+    const admin = mode === 'admin';
+    $('login-panel').dataset.mode = admin ? 'admin' : 'staff';
+    $('login-staff').hidden = admin;
+    $('admin-login-form').hidden = !admin;
+    if (focus !== false) (admin ? $('adm-user') : ($('staff-combo').hidden ? $('login-pin') : $('staff-search'))).focus();
+  }
+
   function resetLogin() {
     S.picked = null;
     $('staff-search').value = '';
@@ -364,6 +400,7 @@
     $('staff-picked').hidden = true;
     $('staff-options').hidden = true;
     $('login-pin').value = '';
+    renderPinCells();
   }
 
   function renderCombo() {
@@ -384,7 +421,7 @@
     $('staff-options').hidden = true;
     $('staff-combo').hidden = true;
     const p = $('staff-picked');
-    p.innerHTML = ic('circle-user-round', 'w-6 h-6 text-info') + '<div class="flex-1 min-w-0"><div class="font-bold">' + esc(s.name) + '</div><div class="text-xs opacity-70 truncate">' + esc(s.position) + '</div></div><button type="button" class="btn btn-ghost btn-sm" id="btn-repick">' + ic('rotate-ccw', 'w-4 h-4') + 'เปลี่ยน</button>';
+    p.innerHTML = '<span class="login-avatar" aria-hidden="true">' + esc(s.name.trim().charAt(0)) + '</span><div class="flex-1 min-w-0"><div class="font-bold leading-snug">' + esc(s.name) + '</div><div class="text-sm opacity-70 leading-snug">' + esc(s.position) + '</div></div><button type="button" class="btn btn-ghost btn-sm px-2" id="btn-repick" aria-label="เปลี่ยนชื่อ">' + ic('rotate-ccw', 'w-4 h-4 text-primary') + '<span class="hidden sm:inline">เปลี่ยน</span></button>';
     p.hidden = false;
     $('btn-repick').onclick = () => { resetLogin(); $('staff-search').focus(); };
     $('login-pin').focus();
@@ -399,7 +436,7 @@
       afterLogin(r);
     } catch (e) {
       toast(e.message, 'err');
-      $('login-pin').select();
+      $('login-pin').value = ''; renderPinCells(); $('login-pin').focus();
     }
   }
 
@@ -893,8 +930,8 @@
       const r = await api('adminLogin', { username: $('adm-user').value.trim(), password: $('adm-pass').value }, { btn: $('admin-login-form').querySelector('[type=submit]') });
       S.admin.token = r.token;
       store('brs_admin', { token: r.token });
-      $('dlg-admin-login').close();
       $('adm-pass').value = '';
+      setLoginMode('staff');
       await enterAdmin();
       toast('เข้าสู่ระบบผู้ดูแลแล้ว', 'ok');
     } catch (e) { toast(e.message, 'err'); }
@@ -1436,7 +1473,9 @@
     $('btn-login').onclick = doLogin;
     $('login-pin').addEventListener('keydown', (e) => { if (e.key === 'Enter') doLogin(); });
     $('btn-open-request').onclick = () => openDialog('dlg-request');
-    $('btn-open-admin').onclick = () => { openDialog('dlg-admin-login'); $('adm-user').focus(); };
+    $('btn-open-admin').onclick = () => setLoginMode('admin');
+    $('btn-admin-back').onclick = () => setLoginMode('staff');
+    $('login-pin').addEventListener('input', () => { const el = $('login-pin'); const v = el.value.replace(/\D/g, '').slice(0, 6); if (v !== el.value) el.value = v; renderPinCells(); });
     $('request-form').addEventListener('submit', submitRequest);
     $('admin-login-form').addEventListener('submit', adminLoginSubmit);
 

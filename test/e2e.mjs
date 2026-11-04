@@ -102,7 +102,16 @@ await step('เลือกชื่อ → เข้าด้วย PIN เร�
   await page.fill('#login-pin', '2580');
   await page.click('#btn-login');
   await expectToast(page, /PIN ไม่ถูกต้อง/);
-  await page.fill('#login-pin', '1234');
+  await page.fill('#login-pin', '12a34');
+  assert.equal(await page.inputValue('#login-pin'), '1234', 'รับเฉพาะตัวเลข');
+  assert.equal(await page.locator('#pin-field .pin-cells span.on').count(), 4, 'จุด PIN แสดงตามจำนวนหลัก');
+  assert.match(await page.textContent('#login-round'), /เปิดรับจอง/);
+  assert.match(await page.textContent('#login-dm'), /4 พฤศจิกายน/);
+  await page.click('#btn-open-admin');
+  assert.ok(await page.isVisible('#admin-login-form') && await page.isHidden('#login-staff'), 'สลับเป็นฟอร์มผู้ดูแลในแผงเดียวกัน');
+  await page.click('#btn-admin-back');
+  assert.ok(await page.isVisible('#login-staff'));
+  assert.equal(await page.inputValue('#login-pin'), '1234', 'สลับไปมาแล้ว PIN ที่กรอกยังอยู่');
   await page.click('#btn-login');
   await page.waitForSelector('#dlg-pin[open]');
   assert.ok(await page.isVisible('#pin-force-note'));
