@@ -18,8 +18,14 @@ function staffId(gas, first) { return ok(gas.call('getPublicInfo')).staff.find((
 function loginAs(gas, first, pin = '2580') {
   const id = staffId(gas, first);
   const r = gas.call('login', { staffId: id, pin });
-  if (!r.ok && r.code === 'NO_PIN') return ok(gas.call('setFirstPin', { staffId: id, pin })).token;
+  if (!r.ok && r.code === 'AUTH') return setPin(gas, id, pin);
   return ok(r).token;
+}
+// เข้าครั้งแรกด้วย PIN เริ่มต้น 1234 แล้วตั้ง PIN ใหม่
+function setPin(gas, id, pin) {
+  const lg = ok(gas.call('login', { staffId: id, pin: '1234' }));
+  assert.equal(lg.mustChange, true);
+  return ok(gas.call('changePin', { token: lg.token, oldPin: '1234', newPin: pin })).token;
 }
 function admin(gas) { return ok(gas.call('adminLogin', { username: 'admin', password: 'secret-pass' })).token; }
 
@@ -38,7 +44,7 @@ test('schema: เพิ่มคอลัมน์ ID, สร้างแท็�
   assert.equal(info.holidays.find((h) => h.date === '2026-12-07').name, 'ชดเชยวันพ่อแห่งชาติ');
   assert.equal(info.settings.bookingOpen, true);
   assert.equal(info.settings.holidayAsWeekend, false, 'ค่าเริ่มต้น: วันหยุดใช้ช่วงวันธรรมดาเหมือนข้อมูลเดิม');
-  assert.equal(info.settings.allowSelfPin, true);
+  assert.equal(info.settings.defaultPin, '1234');
   assert.ok(info.holidays.some((h) => h.date === '2026-10-13'));
   assert.equal(info.today, '2026-11-04');
   const json = JSON.stringify(info);
@@ -58,15 +64,28 @@ test('API: whitelist, รูปแบบคำขอ, API_SECRET', () => {
   ok(sec.call('getPublicInfo', {}, { secret: 's3' }));
 });
 
-test('PIN: ตั้งครั้งแรก, เข้าสู่ระบบ, ล็อกเมื่อผิด 5 ครั้ง, เปลี่ยน PIN', () => {
+test('PIN: เข้าครั้งแรกด้วย 1234, ต้องตั้ง PIN ใหม่ก่อนจอง, ล็อกเมื่อผิด 5 ครั้ง', () => {
   const gas = fresh();
   const id = staffId(gas, 'สมชาย');
-  err(gas.call('login', { staffId: id, pin: '2580' }), 'NO_PIN');
-  err(gas.call('setFirstPin', { staffId: id, pin: '12' }), 'BAD_REQUEST');
-  err(gas.call('setFirstPin', { staffId: id, pin: 'abcd' }), 'BAD_REQUEST');
-  const t = ok(gas.call('setFirstPin', { staffId: id, pin: '2580' })).token;
+  err(gas.call('setFirstPin', { staffId: id, pin: '2580' }), 'BAD_REQUEST');
+  err(gas.call('login', { staffId: id, pin: '2580' }), 'AUTH');
+  const lg = ok(gas.call('login', { staffId: id, pin: '1234' }));
+  assert.equal(lg.mustChange, true);
+  assert.equal(ok(gas.call('getMyBookings', { token: lg.token, month: '2026-11' })).mustChange, true, 'ดูข้อมูลตัวเองได้');
+  const bk = { token: lg.token, date: '2026-11-26', room: 'ห้องเจาะเลือด SMC', station: 'จุดเจาะเลือด', slots: ['06:00-08:30'] };
+  err(gas.call('saveBooking', bk), 'MUST_CHANGE');
+  err(gas.call('saveBookings', { token: lg.token, items: [bk] }), 'MUST_CHANGE');
+  err(gas.call('cancelBooking', { token: lg.token, id: 'Bxxx' }), 'MUST_CHANGE');
+  err(gas.call('changePin', { token: lg.token, oldPin: '1234', newPin: '12' }), 'BAD_REQUEST');
+  err(gas.call('changePin', { token: lg.token, oldPin: '1234', newPin: 'abcd' }), 'BAD_REQUEST');
+  err(gas.call('changePin', { token: lg.token, oldPin: '1234', newPin: '1234' }), 'WEAK_PIN');
+  err(gas.call('changePin', { token: lg.token, oldPin: '9999', newPin: '2580' }), 'AUTH');
+  const t = ok(gas.call('changePin', { token: lg.token, oldPin: '1234', newPin: '2580' })).token;
   assert.ok(t.length >= 32);
-  err(gas.call('setFirstPin', { staffId: id, pin: '8642' }), 'HAS_PIN');
+  err(gas.call('getMyBookings', { token: lg.token, month: '2026-11' }), 'SESSION');
+  assert.equal(ok(gas.call('getMyBookings', { token: t, month: '2026-11' })).mustChange, false);
+  err(gas.call('login', { staffId: id, pin: '1234' }), 'AUTH');
+  assert.equal(ok(gas.call('login', { staffId: id, pin: '2580' })).mustChange, false);
   const staffRow = gas.values('Staff').find((r) => r[0] === id);
   assert.ok(staffRow[5].length === 64 && staffRow[5] !== '2580', 'เก็บ hash ไม่เก็บ PIN จริง');
   for (let i = 0; i < 5; i++) err(gas.call('login', { staffId: id, pin: '0000' }), 'AUTH');
@@ -267,15 +286,17 @@ test('ผู้ดูแล: แก้ชื่อบุคลากรแล้
   err(gas.call('adminSaveStaff', { token: at, id: s.id, firstName: 'สมชาย', lastName: 'ทดสอบดี', position: s.position }), 'DUPLICATE');
   ok(gas.call('adminResetPin', { token: at, id: s.id }));
   err(gas.call('getMyBookings', { token: ut, month: '2026-11' }), 'SESSION');
-  err(gas.call('login', { staffId: s.id, pin: '2580' }), 'NO_PIN');
-  const ut2 = ok(gas.call('setFirstPin', { staffId: s.id, pin: '7395' })).token;
+  err(gas.call('login', { staffId: s.id, pin: '2580' }), 'AUTH');
+  assert.equal(ok(gas.call('adminListStaff', { token: at })).find((x) => x.id === s.id).mustChange, true);
+  const ut2 = setPin(gas, s.id, '7395');
   ok(gas.call('adminSaveStaff', { token: at, id: s.id, firstName: 'สมหญิง', lastName: 'ใจงามมาก', position: s.position, status: 'inactive' }));
   err(gas.call('getMyBookings', { token: ut2, month: '2026-11' }), 'SESSION');
   err(gas.call('login', { staffId: s.id, pin: '7395' }), 'AUTH');
   assert.ok(!ok(gas.call('getPublicInfo')).staff.some((x) => x.id === s.id));
   const n = ok(gas.call('adminSaveStaff', { token: at, firstName: 'พนักงาน', lastName: 'ใหม่', position: s.position, status: 'active' }));
   assert.ok(ok(gas.call('getPublicInfo')).staff.some((x) => x.id === n.id));
-  err(gas.call('login', { staffId: n.id, pin: '2580' }), 'NO_PIN');
+  err(gas.call('login', { staffId: n.id, pin: '2580' }), 'AUTH');
+  assert.equal(ok(gas.call('login', { staffId: n.id, pin: '1234' })).mustChange, true, 'คนใหม่ใช้ PIN เริ่มต้น');
 });
 
 test('ผู้ดูแล: วันหยุดและการตั้งค่า', () => {
@@ -318,8 +339,9 @@ test('แถวใหม่จากระบบเดิม (ไม่มี ID
 test('[R1] ปฏิเสธ PIN ที่เดาง่ายทุกจุดที่ตั้ง PIN ใหม่', () => {
   const gas = fresh();
   const id = staffId(gas, 'สมชาย');
-  ['1234', '0000', '111111', '4321', '1212', '123456', '987654', '2525'].forEach((pin) => err(gas.call('setFirstPin', { staffId: id, pin }), 'WEAK_PIN'));
-  const t = ok(gas.call('setFirstPin', { staffId: id, pin: '2580' })).token;
+  const lg = ok(gas.call('login', { staffId: id, pin: '1234' }));
+  ['1234', '0000', '111111', '4321', '1212', '123456', '987654', '2525'].forEach((pin) => err(gas.call('changePin', { token: lg.token, oldPin: '1234', newPin: pin }), 'WEAK_PIN'));
+  const t = ok(gas.call('changePin', { token: lg.token, oldPin: '1234', newPin: '2580' })).token;
   err(gas.call('changePin', { token: t, oldPin: '2580', newPin: '5678' }), 'WEAK_PIN');
   err(gas.call('changePin', { token: t, oldPin: '2580', newPin: '2580' }), 'BAD_REQUEST');
 });
@@ -331,28 +353,36 @@ test('[R2] รายชื่อสาธารณะไม่เปิดเผ
   assert.ok(!/hasPin|mustChange/.test(json));
 });
 
-test('[R3] ปิดการตั้ง PIN เอง → ผู้ดูแลออก PIN ชั่วคราว → ผู้ใช้ต้องเปลี่ยน PIN', () => {
+test('[R3] ผู้ดูแลรีเซ็ต PIN → กลับเป็น 1234 → ผู้ใช้ต้องตั้ง PIN ใหม่', () => {
   const gas = fresh();
   const at = admin(gas);
-  ok(gas.call('adminSaveSettings', { token: at, settings: { BOOKING_OPEN: true, ALLOW_SELF_PIN: false } }));
   const id = staffId(gas, 'สมชาย');
-  err(gas.call('setFirstPin', { staffId: id, pin: '2580' }), 'SELF_PIN_OFF');
+  const ut = loginAs(gas, 'สมชาย', '2580');
   const r = ok(gas.call('adminResetPin', { token: at, id }));
-  assert.match(r.tempPin, /^\d{6}$/);
-  const lg = ok(gas.call('login', { staffId: id, pin: r.tempPin }));
+  assert.ok(!('tempPin' in r));
+  assert.match(r.message, /1234/);
+  err(gas.call('getMyBookings', { token: ut, month: '2026-11' }), 'SESSION');
+  err(gas.call('login', { staffId: id, pin: '2580' }), 'AUTH');
+  const row = gas.values('Staff').find((x) => x[0] === id);
+  assert.equal(row[5], ''); assert.ok(row[9] === true || row[9] === 'TRUE');
+  const lg = ok(gas.call('login', { staffId: id, pin: '1234' }));
   assert.equal(lg.mustChange, true);
-  assert.equal(ok(gas.call('getMyBookings', { token: lg.token, month: '2026-11' })).mustChange, true);
   assert.equal(ok(gas.call('adminListStaff', { token: at })).find((s) => s.id === id).mustChange, true);
-  const t2 = ok(gas.call('changePin', { token: lg.token, oldPin: r.tempPin, newPin: '3691' })).token;
+  const t2 = ok(gas.call('changePin', { token: lg.token, oldPin: '1234', newPin: '3691' })).token;
   assert.equal(ok(gas.call('getMyBookings', { token: t2, month: '2026-11' })).mustChange, false);
   assert.equal(ok(gas.call('login', { staffId: id, pin: '3691' })).mustChange, false);
+  assert.equal(ok(gas.call('adminListStaff', { token: at })).find((s) => s.id === id).mustChange, false);
   assert.equal(typeof gas.values('Staff').find((x) => x[0] === id)[5], 'string', 'hash เก็บเป็นข้อความ');
+  // ล็อกบัญชียังทำงานกับ PIN เริ่มต้น
+  ok(gas.call('adminResetPin', { token: at, id }));
+  for (let i = 0; i < 5; i++) err(gas.call('login', { staffId: id, pin: '0000' }), 'AUTH');
+  err(gas.call('login', { staffId: id, pin: '1234' }), 'LOCKED');
 });
 
 test('[R4] ล็อกซ้ำ เวลาล็อกเพิ่มเป็นเท่าตัว (กันสุ่ม PIN)', () => {
   const gas = fresh();
   const id = staffId(gas, 'สมชาย');
-  ok(gas.call('setFirstPin', { staffId: id, pin: '2580' }));
+  setPin(gas, id, '2580');
   for (let i = 0; i < 5; i++) gas.call('login', { staffId: id, pin: '0000' });
   assert.match(err(gas.call('login', { staffId: id, pin: '2580' }), 'LOCKED').error, /15 นาที/);
   gas.advance(16 * 60 * 1000);
@@ -419,7 +449,7 @@ test('[R10] ชีต Staff รุ่นเก่า (9 คอลัมน์) �
   });
   ok(gas.call('getPublicInfo'));
   assert.equal(gas.values('Staff')[0][9], 'ต้องเปลี่ยน PIN');
-  ok(gas.call('setFirstPin', { staffId: 'S1', pin: '2580' }));
+  setPin(gas, 'S1', '2580');
 });
 
 test('[R11] ข้อมูลรูปแบบจริง: วันหยุดที่มีการจองช่วงวันธรรมดาแล้วยังแก้ไข/ยกเลิกได้', () => {

@@ -59,11 +59,12 @@ async function pick(page, q, name) {
 }
 async function firstLogin(page, q, name, pin) {
   await pick(page, q, name);
-  await page.fill('#login-pin', pin);
+  await page.fill('#login-pin', '1234');
   await page.click('#btn-login');
-  await page.waitForSelector('#pin-setup-block:not([hidden])');
-  await page.fill('#setup-pin', pin); await page.fill('#setup-pin2', pin);
-  await page.click('#btn-setpin');
+  await page.waitForSelector('#dlg-pin[open]');
+  await page.fill('#pin-new', pin); await page.fill('#pin-new2', pin);
+  await page.click('#pin-form button[type=submit]');
+  await expectToast(page, /เปลี่ยน PIN เรียบร้อย/);
   await page.waitForSelector('#view-user:not([hidden])');
   await idle(page);
 }
@@ -88,31 +89,48 @@ await step('หน้าเข้าสู่ระบบโหลดได้ �
   await page.waitForFunction(() => document.querySelectorAll('svg.lucide').length > 10 && !document.querySelector('#view-login i[data-lucide]'));
 });
 
-await step('เลือกชื่อ → ใส่ PIN → ระบบบอกว่ายังไม่ตั้ง → ตั้ง PIN ครั้งแรก (กัน PIN ง่าย)', async () => {
+await step('เลือกชื่อ → เข้าด้วย PIN เริ่มต้น 1234 → ถูกบังคับตั้ง PIN ใหม่ (กัน PIN ง่าย)', async () => {
   await page.fill('#staff-search', 'zzz');
   assert.match(await page.textContent('#staff-options'), /ไม่พบชื่อ/);
   await page.fill('#staff-search', 'สม');
   assert.equal(await page.locator('#staff-options .combo-item').count(), 2);
   await page.keyboard.press('ArrowDown'); await page.keyboard.press('ArrowUp'); await page.keyboard.press('Enter');
   assert.match(await page.textContent('#staff-picked'), /สมชาย ทดสอบดี/);
-  assert.ok(await page.isVisible('#pin-login-block'), 'แสดงช่อง PIN ก่อน (ไม่บอกล่วงหน้าว่าใครยังไม่ตั้ง PIN)');
+  assert.match(await page.textContent('#first-pin-hint'), /1234/);
   await page.click('#btn-login');
   await expectToast(page, /กรุณากรอก PIN/);
   await page.fill('#login-pin', '2580');
   await page.click('#btn-login');
-  await expectToast(page, /ยังไม่เคยตั้ง PIN/);
-  assert.ok(await page.isVisible('#pin-setup-block'));
-  await page.fill('#setup-pin', '1234'); await page.fill('#setup-pin2', '1234');
-  await page.click('#btn-setpin');
+  await expectToast(page, /PIN ไม่ถูกต้อง/);
+  await page.fill('#login-pin', '1234');
+  await page.click('#btn-login');
+  await page.waitForSelector('#dlg-pin[open]');
+  assert.ok(await page.isVisible('#pin-force-note'));
+  assert.ok(await page.isHidden('#pin-old'), 'ไม่ต้องกรอก PIN เดิม');
+  assert.ok(await page.isHidden('#pin-cancel'));
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(200);
+  assert.ok(await page.evaluate(() => document.getElementById('dlg-pin').open), 'ปิดไม่ได้จนกว่าจะตั้ง PIN');
+  await page.fill('#pin-new', '1234'); await page.fill('#pin-new2', '1234');
+  await page.click('#pin-form button[type=submit]');
+  await expectToast(page, /ห้ามใช้ PIN เริ่มต้น/);
+  await page.fill('#pin-new', '5678'); await page.fill('#pin-new2', '5678');
+  await page.click('#pin-form button[type=submit]');
   await expectToast(page, /เดาง่าย/);
-  await page.fill('#setup-pin', '2580'); await page.fill('#setup-pin2', '2581');
-  await page.click('#btn-setpin');
+  await page.fill('#pin-new', '2580'); await page.fill('#pin-new2', '2581');
+  await page.click('#pin-form button[type=submit]');
   await expectToast(page, /ไม่ตรงกัน/);
-  await page.fill('#setup-pin2', '2580');
-  await page.click('#btn-setpin');
+  await page.fill('#pin-new2', '2580');
+  await page.click('#pin-form button[type=submit]');
+  await expectToast(page, /เปลี่ยน PIN เรียบร้อย/);
+  assert.ok(!(await page.evaluate(() => document.getElementById('dlg-pin').open)));
   await page.waitForSelector('#view-user:not([hidden])');
-  await expectToast(page, /ตั้ง PIN เรียบร้อย/);
   assert.match(await page.textContent('#hello'), /สมชาย ทดสอบดี/);
+  // เปิดหน้าต่างเปลี่ยน PIN ปกติ: ต้องกรอก PIN เดิม
+  await page.evaluate(() => { const b = document.getElementById('btn-change-pin') || document.getElementById('dock-pin'); b.click(); });
+  await page.waitForSelector('#dlg-pin[open]');
+  assert.ok(await page.isVisible('#pin-old'));
+  await page.click('#pin-cancel');
 });
 
 await step('PC แสดงผลเต็มความกว้างจอ (ไม่ล็อกกลางจอ)', async () => {
@@ -457,7 +475,7 @@ await step('บุคลากร: อนุมัติคำขอ แก้�
   await adm.click('#staff-table [data-sreset]');
   await adm.click('#ask-ok');
   await expectToast(adm, /รีเซ็ต PIN แล้ว/);
-  assert.match(await adm.textContent('#staff-table'), /ยังไม่ตั้ง/);
+  assert.match(await adm.textContent('#staff-table'), /PIN เริ่มต้น/);
   await adm.fill('#staff-filter', 'ชูใจ');
   await adm.click('#staff-table [data-sedit]');
   await adm.fill('#st-last', 'รักงานมาก');
@@ -492,49 +510,43 @@ await step('วันหยุด: เพิ่ม แก้ ลบ และบ
   await adm.selectOption('#hol-year', '2026');
 });
 
-await step('ตั้งค่า: ปิดรอบเดือน พ.ย. (เปิดเฉพาะ ธ.ค.), ปิดการตั้ง PIN เอง และแก้ประกาศ', async () => {
+await step('ตั้งค่า: ปิดรอบเดือน พ.ย. (เปิดเฉพาะ ธ.ค.) และแก้ประกาศ', async () => {
   await adm.click('#side-nav [data-tab="settings"]');
   assert.ok(await adm.isChecked('#set-open'));
   assert.ok(!(await adm.isChecked('#set-holiday-rule')));
-  assert.ok(await adm.isChecked('#set-self-pin'));
+  assert.equal(await adm.locator('#set-self-pin').count(), 0, 'ไม่มีตัวเลือกตั้ง PIN เองแล้ว');
   assert.match(await adm.textContent('#set-months'), /ทุกเดือน/);
   await adm.click('#set-month-add');
   await expectToast(adm, /กรุณาเลือกเดือน/);
   await adm.fill('#set-month-input', '2026-12');
   await adm.click('#set-month-add');
   assert.match(await adm.textContent('#set-months'), /ธันวาคม 2569/);
-  await adm.uncheck('#set-self-pin');
   await adm.fill('#set-notice', 'ส่งภายในวันที่ 20 ของเดือน');
   await adm.click('#set-save');
   await expectToast(adm, /บันทึกการตั้งค่าแล้ว/);
   await adm.screenshot({ path: path.join(OUT, 'pc-admin-settings.png') });
 });
 
-let tempPin = '';
-await step('[R17] ปิดตั้ง PIN เอง: รีเซ็ต PIN ได้ PIN ชั่วคราว 6 หลัก', async () => {
+await step('[R17] ผู้ดูแลรีเซ็ต PIN → กลับเป็น PIN เริ่มต้น 1234 / แก้ไขบุคลากรแสดงตำแหน่งเดิม', async () => {
   await adm.click('#side-nav [data-tab="staff"]');
   await adm.fill('#staff-filter', 'สมหญิง');
+  await adm.click('#staff-table [data-sedit]');
+  await adm.waitForSelector('#dlg-staff[open]');
+  assert.notEqual(await adm.inputValue('#st-position'), '', 'dropdown ตำแหน่งต้องเลือกตำแหน่งเดิมไว้');
+  await adm.click('#dlg-staff [data-close]');
   await adm.click('#staff-table [data-sreset]');
+  assert.match(await adm.textContent('#ask-text'), /1234/);
   await adm.click('#ask-ok');
-  await adm.waitForSelector('#temp-pin');
-  tempPin = (await adm.textContent('#temp-pin')).trim();
-  assert.match(tempPin, /^\d{6}$/);
-  await adm.click('#ask-ok');
-  assert.match(await adm.textContent('#staff-table'), /PIN ชั่วคราว/);
+  await expectToast(adm, /รีเซ็ต PIN แล้ว/);
+  assert.match(await adm.textContent('#staff-table'), /PIN เริ่มต้น/);
 });
 
-await step('[R17] ผู้ใช้เข้าด้วย PIN ชั่วคราว → ถูกบังคับเปลี่ยน PIN (กด Esc/ย้อนกลับปิดไม่ได้)', async () => {
+await step('[R17] ผู้ใช้ที่ถูกรีเซ็ตเข้าด้วย 1234 → ถูกบังคับตั้ง PIN ใหม่ (กด Esc/ย้อนกลับปิดไม่ได้)', async () => {
   await page.goto(BASE);
   await page.waitForSelector('#view-login:not([hidden])');
   assert.match(await page.textContent('#notice-login'), /วันที่ 20/);
-  await pick(page, 'มานะ', 'มานะ');
-  await page.fill('#login-pin', '8024');
-  await page.click('#btn-login');
-  await expectToast(page, /ติดต่อผู้ดูแลเพื่อขอ PIN ชั่วคราว/);
-  assert.ok(await page.isHidden('#pin-setup-block'));
-  await page.click('#btn-repick');
   await pick(page, 'สมหญิง', 'สมหญิง');
-  await page.fill('#login-pin', tempPin);
+  await page.fill('#login-pin', '1234');
   await page.click('#btn-login');
   await page.waitForSelector('#dlg-pin[open]');
   assert.ok(await page.isVisible('#pin-force-note'));
@@ -543,7 +555,7 @@ await step('[R17] ผู้ใช้เข้าด้วย PIN ชั่วค
   await page.goBack();
   await page.waitForTimeout(300);
   assert.ok(await page.evaluate(() => document.getElementById('dlg-pin').open), 'ยังเปิดอยู่');
-  await page.fill('#pin-old', tempPin); await page.fill('#pin-new', '4826'); await page.fill('#pin-new2', '4826');
+  await page.fill('#pin-new', '4826'); await page.fill('#pin-new2', '4826');
   await page.click('#pin-form button[type=submit]');
   await expectToast(page, /เปลี่ยน PIN เรียบร้อย/);
   assert.ok(!(await page.evaluate(() => document.getElementById('dlg-pin').open)));
@@ -605,10 +617,6 @@ await step('[R21] ใช้ฟอนต์ Sarabun จากเว็บเอ�
 });
 
 await step('[R22] เมนูด้านซ้ายบน PC + หัวเรื่องหน้า + ภาพรวม (เวรถัดไป / เวรเดือนนี้ / รอบการจอง)', async () => {
-  await adm.click('#side-nav [data-tab="settings"]');
-  await adm.check('#set-self-pin');
-  await adm.click('#set-save');
-  await expectToast(adm, /บันทึกการตั้งค่าแล้ว/);
   await firstLogin(nf, 'มานะ', 'มานะ', '5307');
   assert.ok(await nf.isVisible('#sidebar'));
   assert.match(await nf.textContent('#side-foot'), /มานะ ขยันยิ่ง/);
@@ -743,11 +751,6 @@ const DEV = [
   { name: 'pixel-7', d: devices['Pixel 7'], who: 'ชูใจ', pin: '9173', mobile: true },
   { name: 'ipad-mini', d: devices['iPad Mini'], who: 'ใหม่', pin: '6402', mobile: true }
 ];
-// ตอนนี้ปิดการตั้ง PIN เองอยู่ → เปิดกลับเพื่อทดสอบผู้ใช้ใหม่บนมือถือ
-await adm.click('#side-nav [data-tab="settings"]');
-await adm.check('#set-self-pin');
-await adm.click('#set-save');
-await expectToast(adm, /บันทึกการตั้งค่าแล้ว/);
 for (const v of DEV) {
   const m = await newPage(Object.assign({}, v.d));
   await step(v.name + ': ใช้งานครบด้วยการแตะ ไม่มี scroll แนวนอน ปุ่มใหญ่พอ ช่องกรอกไม่ทำให้ซูม', async () => {

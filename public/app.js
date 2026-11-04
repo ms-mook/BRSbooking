@@ -154,6 +154,7 @@
       if (e.name === 'AbortError') e = Object.assign(new Error('server ตอบช้าเกินไป กรุณาลองใหม่อีกครั้ง'), { code: 'TIMEOUT' });
       else if (!e.code) { e.code = 'NETWORK'; e.message = 'เชื่อมต่อ server ไม่สำเร็จ กรุณาตรวจสอบอินเทอร์เน็ตแล้วลองใหม่'; }
       if (e.code === 'SESSION') handleExpired(fn);
+      if (e.code === 'MUST_CHANGE' && S.token && !$('dlg-pin').open) forceChangePin();
       throw e;
     } finally {
       clearTimeout(timer);
@@ -310,6 +311,7 @@
       ? '<div role="note" class="alert alert-soft alert-info items-start">' + ic('megaphone', 'w-5 h-5 text-info mt-0.5') + '<div class="text-sm"><b>หมายเหตุ:</b> ' + esc(st.notice) + (st.contact ? ' <span class="whitespace-nowrap">' + ic('phone', 'w-3.5 h-3.5 inline text-success') + ' ติดต่อ ' + esc(st.contact) + '</span>' : '') + '</div></div>'
       : '';
     $('forgot-contact').textContent = st.contact ? 'โทร ' + st.contact : '';
+    $('default-pin-text').textContent = st.defaultPin || '1234';
     $('notice-login').innerHTML = html;
     $('notice-user').innerHTML = html;
   }
@@ -364,9 +366,7 @@
     $('staff-combo').hidden = false;
     $('staff-picked').hidden = true;
     $('staff-options').hidden = true;
-    ['login-pin', 'setup-pin', 'setup-pin2'].forEach((id) => { $(id).value = ''; });
-    $('pin-login-block').hidden = false;
-    $('pin-setup-block').hidden = true;
+    $('login-pin').value = '';
   }
 
   function renderCombo() {
@@ -390,15 +390,7 @@
     p.innerHTML = ic('circle-user-round', 'w-6 h-6 text-info') + '<div class="flex-1 min-w-0"><div class="font-bold">' + esc(s.name) + '</div><div class="text-xs opacity-70 truncate">' + esc(s.position) + '</div></div><button type="button" class="btn btn-ghost btn-sm" id="btn-repick">' + ic('rotate-ccw', 'w-4 h-4') + 'เปลี่ยน</button>';
     p.hidden = false;
     $('btn-repick').onclick = () => { resetLogin(); $('staff-search').focus(); };
-    $('pin-login-block').hidden = false;
-    $('pin-setup-block').hidden = true;
     $('login-pin').focus();
-  }
-
-  function showSetup() {
-    $('pin-login-block').hidden = true;
-    $('pin-setup-block').hidden = false;
-    $('setup-pin').focus();
   }
 
   async function doLogin() {
@@ -409,29 +401,8 @@
       const r = await api('login', { staffId: S.picked.id, pin: pin }, { btn: $('btn-login') });
       afterLogin(r);
     } catch (e) {
-      if (e.code === 'NO_PIN') {
-        // ผู้ดูแลอาจเพิ่งเปลี่ยนการตั้งค่า — ดึงค่าล่าสุดก่อนตัดสินใจ
-        try { const fresh = await api('getPublicInfo', {}, { silent: true }); S.info.settings = fresh.settings; S.info.holidays = fresh.holidays; } catch (x) { /* ใช้ค่าเดิม */ }
-        if (!S.info.settings.allowSelfPin) { toast('บัญชีนี้ยังไม่มี PIN กรุณาติดต่อผู้ดูแลเพื่อขอ PIN ชั่วคราว', 'warn'); return; }
-        toast('ยังไม่เคยตั้ง PIN — ตั้ง PIN ใหม่ได้เลย', 'info'); showSetup(); return;
-      }
       toast(e.message, 'err');
       $('login-pin').select();
-    }
-  }
-
-  async function doSetPin() {
-    const a = $('setup-pin').value.trim();
-    const b = $('setup-pin2').value.trim();
-    if (!/^\d{4,6}$/.test(a)) { toast('PIN ต้องเป็นตัวเลข 4–6 หลัก', 'warn'); return; }
-    if (a !== b) { toast('PIN ทั้งสองช่องไม่ตรงกัน', 'warn'); return; }
-    try {
-      const r = await api('setFirstPin', { staffId: S.picked.id, pin: a }, { btn: $('btn-setpin') });
-      toast('ตั้ง PIN เรียบร้อย', 'ok');
-      afterLogin(r);
-    } catch (e) {
-      if (e.code === 'HAS_PIN') { $('pin-login-block').hidden = false; $('pin-setup-block').hidden = true; }
-      toast(e.message, e.code === 'WEAK_PIN' ? 'warn' : 'err');
     }
   }
 
@@ -442,8 +413,13 @@
     if (r.mustChange && !$('dlg-pin').open) forceChangePin();
   }
 
+  function defaultPin() { return (S.info && S.info.settings && S.info.settings.defaultPin) || '1234'; }
+
+  // บัญชีที่ใช้ PIN เริ่มต้น: ต้องตั้ง PIN ใหม่ก่อนใช้งาน (PIN เดิม = PIN เริ่มต้น จึงไม่ต้องกรอก)
   function forceChangePin() {
     $('pin-form').reset();
+    $('pin-old').value = defaultPin();
+    $('pin-old-wrap').hidden = true;
     $('pin-force-note').hidden = false;
     $('pin-cancel').hidden = true;
     $('dlg-pin').dataset.locked = '1';
@@ -888,12 +864,13 @@
     const o = $('pin-old').value.trim(), n = $('pin-new').value.trim(), n2 = $('pin-new2').value.trim();
     if (!/^\d{4,6}$/.test(n)) { toast('PIN ใหม่ต้องเป็นตัวเลข 4–6 หลัก', 'warn'); return; }
     if (n !== n2) { toast('PIN ใหม่ทั้งสองช่องไม่ตรงกัน', 'warn'); return; }
+    if (n === defaultPin()) { toast('ห้ามใช้ PIN เริ่มต้น ' + defaultPin() + ' กรุณาตั้ง PIN ใหม่', 'warn'); return; }
     try {
       const r = await api('changePin', { token: S.token, oldPin: o, newPin: n }, { btn: $('pin-form').querySelector('[type=submit]') });
       S.token = r.token; store('brs_session', { token: r.token, user: S.user });
       const d = $('dlg-pin');
       delete d.dataset.locked;
-      $('pin-force-note').hidden = true; $('pin-cancel').hidden = false;
+      $('pin-force-note').hidden = true; $('pin-cancel').hidden = false; $('pin-old-wrap').hidden = false;
       d.close();
       toast('เปลี่ยน PIN เรียบร้อย', 'ok');
     } catch (e) { toast(e.message, e.code === 'WEAK_PIN' ? 'warn' : 'err'); }
@@ -1155,10 +1132,10 @@
     if (!list.length) html += '<tr><td colspan="5" class="text-center opacity-70 py-6">ไม่พบรายชื่อ</td></tr>';
     list.forEach((s) => {
       const st = STATUS[s.status] || [s.status, 'badge-ghost'];
-      const pin = !s.hasPin ? '<span class="badge badge-ghost badge-sm">ยังไม่ตั้ง</span>' : s.mustChange ? '<span class="badge badge-warning badge-soft badge-sm">PIN ชั่วคราว</span>' : '<span class="badge badge-success badge-soft badge-sm gap-1">' + ic('check', 'w-3 h-3') + 'ตั้งแล้ว</span>';
+      const pin = !s.hasPin || s.mustChange ? '<span class="badge badge-warning badge-soft badge-sm">PIN เริ่มต้น</span>' : '<span class="badge badge-success badge-soft badge-sm gap-1">' + ic('check', 'w-3 h-3') + 'ตั้งแล้ว</span>';
       html += '<tr class="hover"><td class="whitespace-nowrap font-semibold">' + esc(s.firstName + ' ' + s.lastName) + '</td><td class="whitespace-nowrap">' + esc(POS_SHORT[s.position] || s.position) + '</td>' +
         '<td><span class="badge badge-sm badge-soft ' + st[1] + '">' + esc(st[0]) + '</span></td><td class="pin-cell">' + pin + '</td>' +
-        '<td class="text-right whitespace-nowrap"><button class="btn btn-ghost btn-sm" data-sedit="' + esc(s.id) + '">' + ic('pencil', 'w-4 h-4 text-info') + 'แก้ไข</button>' + (s.hasPin || !S.admin.settings.allowSelfPin ? ' <button class="btn btn-ghost btn-sm" data-sreset="' + esc(s.id) + '">' + ic('rotate-ccw', 'w-4 h-4 text-warning') + 'รีเซ็ต PIN</button>' : '') + '</td></tr>';
+        '<td class="text-right whitespace-nowrap"><button class="btn btn-ghost btn-sm" data-sedit="' + esc(s.id) + '">' + ic('pencil', 'w-4 h-4 text-info') + 'แก้ไข</button> <button class="btn btn-ghost btn-sm" data-sreset="' + esc(s.id) + '">' + ic('rotate-ccw', 'w-4 h-4 text-warning') + 'รีเซ็ต PIN</button></td></tr>';
     });
     $('staff-table').innerHTML = html + '</tbody>';
     const byId = (id) => S.admin.staff.find((s) => s.id === id);
@@ -1206,15 +1183,13 @@
   }
 
   async function resetPin(s) {
-    const self = S.admin.settings.allowSelfPin;
-    const ok = await ask({ title: 'รีเซ็ต PIN', text: 'รีเซ็ต PIN ของ ' + s.firstName + ' ' + s.lastName + '?\n' + (self ? 'ผู้ใช้จะตั้ง PIN ใหม่ได้เองเมื่อเข้าสู่ระบบครั้งถัดไป' : 'ระบบจะออก PIN ชั่วคราว 6 หลัก ให้คุณแจ้งผู้ใช้โดยตรง'), okText: 'รีเซ็ต', danger: true });
+    const dp = S.admin.settings.defaultPin || '1234';
+    const ok = await ask({ title: 'รีเซ็ต PIN', text: 'รีเซ็ต PIN ของ ' + s.firstName + ' ' + s.lastName + ' กลับเป็น PIN เริ่มต้น ' + dp + '?\nผู้ใช้เข้าสู่ระบบด้วย ' + dp + ' แล้วต้องตั้ง PIN ใหม่ก่อนใช้งาน', okText: 'รีเซ็ต', danger: true });
     if (!ok) return;
     try {
       const r = await api('adminResetPin', { token: S.admin.token, id: s.id });
       await reloadStaff();
-      if (r.tempPin) {
-        await ask({ title: 'PIN ชั่วคราว', tone: 'ok', alertOnly: true, okText: 'รับทราบ', text: 'แจ้ง PIN นี้ให้ ' + s.firstName + ' ' + s.lastName + ' โดยตรง (ผู้ใช้ต้องเปลี่ยน PIN เมื่อเข้าสู่ระบบ)', html: '<div class="text-4xl font-bold tracking-[.3em] text-center my-4 text-primary" id="temp-pin">' + esc(r.tempPin) + '</div>' });
-      } else toast(r.message, 'ok');
+      toast(r.message, 'ok');
     } catch (e) { toast(e.message, 'err'); }
   }
 
@@ -1282,7 +1257,6 @@
     const st = S.admin.settings;
     $('set-open').checked = st.bookingOpen;
     $('set-holiday-rule').checked = st.holidayAsWeekend;
-    $('set-self-pin').checked = st.allowSelfPin;
     $('set-close-at').value = st.closeAt || '';
     $('set-block-holiday').checked = st.blockHolidays;
     $('set-notice').value = st.notice;
@@ -1306,7 +1280,7 @@
         settings: {
           BOOKING_OPEN: $('set-open').checked, BOOKING_MONTHS: S.admin.months.join(','),
           NOTICE: $('set-notice').value, CONTACT: $('set-contact').value,
-          SPECIAL_DAY_RULE: $('set-holiday-rule').checked, ALLOW_SELF_PIN: $('set-self-pin').checked, CLOSE_AT: $('set-close-at').value, BLOCK_HOLIDAYS: $('set-block-holiday').checked
+          SPECIAL_DAY_RULE: $('set-holiday-rule').checked, CLOSE_AT: $('set-close-at').value, BLOCK_HOLIDAYS: $('set-block-holiday').checked
         }
       }, { btn: $('set-save') });
       S.admin.settings = r.settings; S.info.settings = r.settings;
@@ -1431,7 +1405,7 @@
   }
 
   /* ---------------- bindings ---------------- */
-  function openPinDialog() { $('pin-form').reset(); $('pin-force-note').hidden = true; $('pin-cancel').hidden = false; openDialog('dlg-pin'); }
+  function openPinDialog() { $('pin-form').reset(); $('pin-old-wrap').hidden = false; $('pin-force-note').hidden = true; $('pin-cancel').hidden = false; openDialog('dlg-pin'); }
 
   function bindSwipe(el, onLeft, onRight) {
     let x0 = null, y0 = null;
@@ -1464,8 +1438,6 @@
     document.addEventListener('click', (e) => { if (!e.target.closest('#staff-combo')) $('staff-options').hidden = true; });
     $('btn-login').onclick = doLogin;
     $('login-pin').addEventListener('keydown', (e) => { if (e.key === 'Enter') doLogin(); });
-    $('btn-setpin').onclick = doSetPin;
-    $('setup-pin2').addEventListener('keydown', (e) => { if (e.key === 'Enter') doSetPin(); });
     $('btn-open-request').onclick = () => openDialog('dlg-request');
     $('btn-open-admin').onclick = () => { openDialog('dlg-admin-login'); $('adm-user').focus(); };
     $('request-form').addEventListener('submit', submitRequest);

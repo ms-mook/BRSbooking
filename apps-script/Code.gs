@@ -58,6 +58,8 @@ const CONFIG = {
   LOCK_MINUTES: 15,
   MAX_LOCK_MINUTES: 360,
   PIN_ITERATIONS: 300,
+  // PIN เริ่มต้นของทุกคน (บัญชีที่ยังไม่ตั้ง PIN หรือถูกผู้ดูแลรีเซ็ต) — เข้าได้แล้วต้องตั้ง PIN ใหม่ก่อนใช้งาน
+  DEFAULT_PIN: '1234',
   MAX_BODY: 60000,
   DEFAULT_SETTINGS: [
     ['BOOKING_OPEN', 'TRUE', 'เปิดรับจองเวร (TRUE/FALSE)'],
@@ -66,8 +68,7 @@ const CONFIG = {
     ['CONTACT', '63662/67204', 'เบอร์ติดต่อ'],
     ['BLOCK_HOLIDAYS', 'TRUE', 'วันหยุดนักขัตฤกษ์ปิดรับจอง (TRUE/FALSE) — ผู้ดูแลยังเพิ่มการจองให้ได้'],
     ['SPECIAL_DAY_RULE', 'FALSE', 'วันหยุดราชการใช้ช่วงเวลาแบบวันเสาร์-อาทิตย์ (TRUE/FALSE) — ข้อมูลเดิมจองแบบวันธรรมดา จึงปิดไว้'],
-    ['CLOSE_AT', '', 'วันสุดท้ายที่รับจอง (yyyy-MM-dd) หลังวันนี้ปิดรับอัตโนมัติ (ว่าง = ไม่กำหนด)'],
-    ['ALLOW_SELF_PIN', 'TRUE', 'ให้บุคลากรตั้ง PIN ครั้งแรกเอง (TRUE/FALSE) — ปิดเมื่อทุกคนตั้ง PIN แล้ว เพื่อกันคนอื่นตั้ง PIN แทน']
+    ['CLOSE_AT', '', 'วันสุดท้ายที่รับจอง (yyyy-MM-dd) หลังวันนี้ปิดรับอัตโนมัติ (ว่าง = ไม่กำหนด)']
   ],
   // วันหยุดตั้งต้น (แก้ไขได้ในหน้าผู้ดูแล)
   DEFAULT_HOLIDAYS: [
@@ -106,7 +107,6 @@ const CONFIG = {
 const API_ = {
   getPublicInfo: getPublicInfo_,
   login: login_,
-  setFirstPin: setFirstPin_,
   requestAccount: requestAccount_,
   changePin: changePin_,
   logout: logout_,
@@ -187,31 +187,13 @@ function getPublicInfo_() {
 function login_(a) {
   const staff = findStaff_(str_(a.staffId));
   if (!staff || staff.status !== 'active') throw appError_('ไม่พบรายชื่อ หรือบัญชียังไม่ได้รับการอนุมัติ', 'AUTH');
-  if (!staff.hash) throw appError_('ยังไม่ได้ตั้ง PIN กรุณาตั้ง PIN ครั้งแรก', 'NO_PIN');
   checkLocked_('u_' + staff.id);
-  if (hashPin_(str_(a.pin), staff.salt) !== staff.hash) {
+  if (!pinMatches_(staff, str_(a.pin))) {
     registerFail_('u_' + staff.id);
     throw appError_('PIN ไม่ถูกต้อง', 'AUTH');
   }
   clearFails_('u_' + staff.id);
   return { token: newUserSession_(staff), user: publicUser_(staff), mustChange: !!staff.mustChange };
-}
-
-function setFirstPin_(a) {
-  if (readSettings_().ALLOW_SELF_PIN !== 'TRUE') throw appError_('ระบบปิดการตั้ง PIN ด้วยตนเอง กรุณาติดต่อผู้ดูแลเพื่อขอ PIN ชั่วคราว', 'SELF_PIN_OFF');
-  const pin = validPin_(a.pin, true);
-  rateLimit_('setpin_all', 60, 3600, 'มีการตั้ง PIN จำนวนมาก กรุณาลองใหม่ภายหลัง');
-  return withLock_(function () {
-    const staff = findStaff_(str_(a.staffId));
-    if (!staff || staff.status !== 'active') throw appError_('ไม่พบรายชื่อ หรือบัญชียังไม่ได้รับการอนุมัติ', 'AUTH');
-    if (staff.hash) throw appError_('บัญชีนี้ตั้ง PIN แล้ว กรุณาเข้าสู่ระบบด้วย PIN เดิม หรือติดต่อผู้ดูแลเพื่อรีเซ็ต', 'HAS_PIN');
-    const salt = newSalt_();
-    staff.salt = salt;
-    staff.hash = hashPin_(pin, salt);
-    staff.mustChange = false;
-    writeStaff_(staff);
-    return { token: newUserSession_(staff), user: publicUser_(staff) };
-  });
 }
 
 function requestAccount_(a) {
@@ -234,10 +216,10 @@ function requestAccount_(a) {
 }
 
 function changePin_(a) {
-  const staff = requireUser_(a.token);
+  const staff = requireUser_(a.token, true);
   const pin = validPin_(a.newPin, true);
   checkLocked_('u_' + staff.id);
-  if (hashPin_(str_(a.oldPin), staff.salt) !== staff.hash) { registerFail_('u_' + staff.id); throw appError_('PIN เดิมไม่ถูกต้อง', 'AUTH'); }
+  if (!pinMatches_(staff, str_(a.oldPin))) { registerFail_('u_' + staff.id); throw appError_('PIN เดิมไม่ถูกต้อง', 'AUTH'); }
   if (str_(a.oldPin) === pin) throw appError_('PIN ใหม่ต้องไม่ซ้ำกับ PIN เดิม', 'BAD_REQUEST');
   return withLock_(function () {
     staff.mustChange = false;
@@ -258,7 +240,7 @@ function logout_(a) {
 }
 
 function getMyBookings_(a) {
-  const staff = requireUser_(a.token);
+  const staff = requireUser_(a.token, true);
   const range = monthRange_(a.month, a.upcoming);
   const mine = function (b) { return b.key === staff.key && b.date >= range.from && b.date <= range.to; };
   const bookings = readBookings_().filter(mine).sort(byDate_);
@@ -431,15 +413,9 @@ function adminResetPin_(a) {
     const s = findStaff_(str_(a.id));
     if (!s) throw appError_('ไม่พบรายชื่อบุคลากร', 'NOT_FOUND');
     clearFails_('u_' + s.id);
-    if (readSettings_().ALLOW_SELF_PIN === 'TRUE') {
-      s.hash = ''; s.salt = ''; s.mustChange = false;
-      writeStaff_(s);
-      return { message: 'รีเซ็ต PIN แล้ว ผู้ใช้จะตั้ง PIN ใหม่ได้เมื่อเข้าสู่ระบบครั้งถัดไป' };
-    }
-    const temp = tempPin_();
-    s.salt = newSalt_(); s.hash = hashPin_(temp, s.salt); s.mustChange = true;
+    s.hash = ''; s.salt = ''; s.mustChange = true;
     writeStaff_(s);
-    return { tempPin: temp, message: 'ออก PIN ชั่วคราวแล้ว แจ้ง PIN นี้ให้ผู้ใช้โดยตรง ผู้ใช้ต้องเปลี่ยน PIN เมื่อเข้าสู่ระบบ' };
+    return { message: 'รีเซ็ต PIN แล้ว ผู้ใช้เข้าสู่ระบบด้วย PIN ' + CONFIG.DEFAULT_PIN + ' แล้วตั้ง PIN ใหม่' };
   });
 }
 
@@ -506,8 +482,7 @@ function adminSaveSettings_(a) {
     CONTACT: safeCell_(cleanText_(s.CONTACT, 100)),
     SPECIAL_DAY_RULE: s.SPECIAL_DAY_RULE === true || s.SPECIAL_DAY_RULE === 'TRUE' ? 'TRUE' : 'FALSE',
     BLOCK_HOLIDAYS: s.BLOCK_HOLIDAYS === false || s.BLOCK_HOLIDAYS === 'FALSE' ? 'FALSE' : 'TRUE',
-    CLOSE_AT: s.CLOSE_AT ? validDate_(s.CLOSE_AT) : '',
-    ALLOW_SELF_PIN: s.ALLOW_SELF_PIN === false || s.ALLOW_SELF_PIN === 'FALSE' ? 'FALSE' : 'TRUE'
+    CLOSE_AT: s.CLOSE_AT ? validDate_(s.CLOSE_AT) : ''
   };
   return withLock_(function () {
     const sh = sheet_(CONFIG.SHEETS.SETTINGS);
@@ -770,7 +745,7 @@ function readStaff_() {
     const s = {
       id: String(r[0]), firstName: norm_(r[1]), lastName: norm_(r[2]), position: norm_(r[3]),
       status: norm_(r[4]) || 'active', hash: String(r[5] || ''), salt: String(r[6] || ''),
-      createdAt: tsStr_(r[7]), updatedAt: tsStr_(r[8]), mustChange: r[9] === true || String(r[9]).toUpperCase() === 'TRUE', row: i + 1
+      createdAt: tsStr_(r[7]), updatedAt: tsStr_(r[8]), mustChange: !r[5] || r[9] === true || String(r[9]).toUpperCase() === 'TRUE', row: i + 1
     };
     s.key = nameKey_(s.firstName, s.lastName);
     out.push(s);
@@ -826,7 +801,6 @@ function readSettings_() {
   s.BOOKING_OPEN = String(s.BOOKING_OPEN).toUpperCase() === 'TRUE' ? 'TRUE' : 'FALSE';
   s.SPECIAL_DAY_RULE = String(s.SPECIAL_DAY_RULE).toUpperCase() === 'TRUE' ? 'TRUE' : 'FALSE';
   s.BLOCK_HOLIDAYS = String(s.BLOCK_HOLIDAYS).toUpperCase() === 'FALSE' ? 'FALSE' : 'TRUE';
-  s.ALLOW_SELF_PIN = String(s.ALLOW_SELF_PIN).toUpperCase() === 'FALSE' ? 'FALSE' : 'TRUE';
   s.CLOSE_AT = dateKey_(s.CLOSE_AT) || '';
   return s;
 }
@@ -839,7 +813,7 @@ function publicSettings_(s) {
     contact: s.CONTACT || '',
     holidayAsWeekend: s.SPECIAL_DAY_RULE === 'TRUE',
     blockHolidays: s.BLOCK_HOLIDAYS === 'TRUE',
-    allowSelfPin: s.ALLOW_SELF_PIN === 'TRUE',
+    defaultPin: CONFIG.DEFAULT_PIN,
     closeAt: s.CLOSE_AT || ''
   };
 }
@@ -848,20 +822,21 @@ function publicSettings_(s) {
 
 function newUserSession_(staff) {
   const token = newToken_();
-  CacheService.getScriptCache().put('usr_' + token, JSON.stringify({ id: staff.id, h: staff.hash.slice(0, 16) }), CONFIG.SESSION_SECONDS);
+  CacheService.getScriptCache().put('usr_' + token, JSON.stringify({ id: staff.id, h: String(staff.hash || '').slice(0, 16) }), CONFIG.SESSION_SECONDS);
   return token;
 }
 
-function requireUser_(token) {
+function requireUser_(token, allowMustChange) {
   const t = str_(token);
   const raw = t && CacheService.getScriptCache().get('usr_' + t);
   if (!raw) throw appError_('หมดเวลาการใช้งาน กรุณาเข้าสู่ระบบใหม่', 'SESSION');
   const sess = JSON.parse(raw);
   const staff = findStaff_(sess.id);
-  if (!staff || staff.status !== 'active' || !staff.hash || staff.hash.slice(0, 16) !== sess.h) {
+  if (!staff || staff.status !== 'active' || String(staff.hash || '').slice(0, 16) !== sess.h) {
     CacheService.getScriptCache().remove('usr_' + t);
     throw appError_('หมดเวลาการใช้งาน กรุณาเข้าสู่ระบบใหม่', 'SESSION');
   }
+  if (staff.mustChange && !allowMustChange) throw appError_('กรุณาตั้ง PIN ใหม่ก่อนใช้งาน', 'MUST_CHANGE');
   return staff;
 }
 
@@ -918,6 +893,12 @@ function hashPin_(pin, salt) {
   return h;
 }
 
+// บัญชีที่ยังไม่มี PIN (ใหม่ หรือถูกรีเซ็ต) ใช้ PIN เริ่มต้น
+function pinMatches_(staff, pin) {
+  if (!staff.hash) return pin === CONFIG.DEFAULT_PIN;
+  return hashPin_(pin, staff.salt) === staff.hash;
+}
+
 function shortHash_(s) {
   return toHex_(Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, String(s), Utilities.Charset.UTF_8)).slice(0, 24);
 }
@@ -944,12 +925,6 @@ function isWeakPin_(p) {
   if ('01234567890'.indexOf(p) >= 0 || '09876543210'.indexOf(p) >= 0) return true; // เรียงกัน
   if (p.length % 2 === 0 && p.slice(0, 2).repeat(p.length / 2) === p) return true;  // 1212, 2525
   return ['123123', '112233', '121212'].indexOf(p) >= 0;
-}
-
-function tempPin_() {
-  let p;
-  do { p = String(100000 + parseInt(Utilities.getUuid().replace(/-/g, '').slice(0, 12), 16) % 900000); } while (isWeakPin_(p));
-  return p;
 }
 
 function validDate_(d) {

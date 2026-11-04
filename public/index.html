@@ -100,19 +100,9 @@
                   <input id="login-pin" type="password" inputmode="numeric" maxlength="6" autocomplete="current-password" class="grow tracking-[.4em] placeholder:tracking-normal" placeholder="ตัวเลข 4–6 หลัก">
                 </label>
               </fieldset>
+              <div class="alert alert-soft alert-info text-sm py-2" id="first-pin-hint"><i data-lucide="info" class="w-4 h-4 text-info"></i><span>ใช้งานครั้งแรก หรือเพิ่งถูกรีเซ็ต PIN: ใช้ PIN <b id="default-pin-text">1234</b> แล้วระบบจะให้ตั้ง PIN ใหม่</span></div>
               <button class="btn btn-primary btn-block" id="btn-login"><i data-lucide="log-in" class="w-4 h-4"></i>เข้าสู่ระบบ</button>
               <p class="text-xs opacity-70 text-center flex items-center justify-center gap-1" id="forgot-pin"><i data-lucide="circle-help" class="w-3.5 h-3.5 text-info"></i>ลืม PIN? ติดต่อผู้ดูแลเพื่อรีเซ็ต <span id="forgot-contact"></span></p>
-            </div>
-
-            <div id="pin-setup-block" class="flex flex-col gap-3" hidden>
-              <div role="alert" class="alert alert-soft alert-info"><i data-lucide="sparkles" class="w-5 h-5 text-info"></i><span>ครั้งแรกที่ใช้งาน กรุณาตั้ง PIN ตัวเลข 4–6 หลัก (ห้ามใช้เลขเรียงหรือเลขซ้ำ เช่น 1234, 0000)</span></div>
-              <fieldset class="fieldset">
-                <legend class="fieldset-legend">ตั้ง PIN</legend>
-                <label class="input w-full"><i data-lucide="key-round" class="w-4 h-4 text-warning"></i><input id="setup-pin" type="password" inputmode="numeric" maxlength="6" autocomplete="new-password" class="grow tracking-[.4em] placeholder:tracking-normal"></label>
-                <legend class="fieldset-legend">ยืนยัน PIN</legend>
-                <label class="input w-full"><i data-lucide="key-round" class="w-4 h-4 text-warning"></i><input id="setup-pin2" type="password" inputmode="numeric" maxlength="6" autocomplete="new-password" class="grow tracking-[.4em] placeholder:tracking-normal"></label>
-              </fieldset>
-              <button class="btn btn-primary btn-block" id="btn-setpin"><i data-lucide="badge-check" class="w-4 h-4"></i>ตั้ง PIN และเข้าสู่ระบบ</button>
             </div>
 
             <div class="divider my-0"></div>
@@ -315,7 +305,6 @@
           <div class="card bg-base-100 shadow-sm">
             <div class="card-body p-4 sm:p-6 gap-3">
               <h2 class="card-title text-base"><i data-lucide="shield-check" class="w-5 h-5 text-warning"></i>ความปลอดภัยและประกาศ</h2>
-              <label class="label cursor-pointer justify-start gap-3 whitespace-normal"><input type="checkbox" class="toggle toggle-warning" id="set-self-pin"><span class="text-base-content">ให้บุคลากรตั้ง PIN ครั้งแรกเอง <span class="opacity-70 text-sm block">ปิดเมื่อทุกคนตั้ง PIN แล้ว เพื่อกันผู้อื่นตั้ง PIN แทน (รีเซ็ต PIN จะได้ PIN ชั่วคราวแทน)</span></span></label>
               <fieldset class="fieldset">
                 <legend class="fieldset-legend"><i data-lucide="megaphone" class="w-4 h-4 text-info"></i>ข้อความประกาศ</legend>
                 <textarea class="textarea w-full" id="set-notice" rows="4"></textarea>
@@ -420,9 +409,9 @@
   <dialog id="dlg-pin" class="modal modal-bottom sm:modal-middle">
     <form method="dialog" class="modal-box" id="pin-form">
       <h3 class="font-bold text-lg flex items-center gap-2"><span class="icon-tile icon-tile-sm bg-warning/15 text-warning"><i data-lucide="key-round"></i></span>เปลี่ยน PIN</h3>
-      <div role="alert" class="alert alert-soft alert-warning mt-3" id="pin-force-note" hidden><i data-lucide="triangle-alert" class="w-5 h-5"></i><span>คุณกำลังใช้ PIN ชั่วคราวจากผู้ดูแล กรุณาตั้ง PIN ใหม่ก่อนใช้งาน</span></div>
+      <div role="alert" class="alert alert-soft alert-warning mt-3" id="pin-force-note" hidden><i data-lucide="triangle-alert" class="w-5 h-5"></i><span>คุณกำลังใช้ PIN เริ่มต้น กรุณาตั้ง PIN ใหม่ของคุณเองก่อนใช้งาน (ตัวเลข 4–6 หลัก ห้ามเลขเรียงหรือเลขซ้ำ)</span></div>
       <fieldset class="fieldset">
-        <legend class="fieldset-legend">PIN เดิม</legend><input class="input w-full tracking-[.4em] placeholder:tracking-normal" id="pin-old" type="password" inputmode="numeric" maxlength="6" required autocomplete="current-password">
+        <div id="pin-old-wrap" class="contents"><legend class="fieldset-legend">PIN เดิม</legend><input class="input w-full tracking-[.4em] placeholder:tracking-normal" id="pin-old" type="password" inputmode="numeric" maxlength="6" required autocomplete="current-password"></div>
         <legend class="fieldset-legend">PIN ใหม่</legend><input class="input w-full tracking-[.4em] placeholder:tracking-normal" id="pin-new" type="password" inputmode="numeric" maxlength="6" required autocomplete="new-password">
         <legend class="fieldset-legend">ยืนยัน PIN ใหม่</legend><input class="input w-full tracking-[.4em] placeholder:tracking-normal" id="pin-new2" type="password" inputmode="numeric" maxlength="6" required autocomplete="new-password">
       </fieldset>

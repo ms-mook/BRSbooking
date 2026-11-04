@@ -1,0 +1,14 @@
+import { spawn } from 'node:child_process';
+import { chromium, devices } from 'playwright';
+const srv = spawn('node', ['dev/server.mjs'], { cwd: '/home/claude/brsbooking', env: { ...process.env, PORT: '5191' } });
+await new Promise((r) => setTimeout(r, 1500));
+const b = await chromium.launch();
+const p = await (await b.newContext({ ...devices['iPhone SE'] })).newPage();
+await p.goto('http://localhost:5191');
+await p.waitForSelector('#view-login:not([hidden])');
+await p.fill('#staff-search', 'สม'); await p.locator('#staff-options .combo-item').first().click();
+await p.screenshot({ path: '/tmp/claude-0/-home-claude/6f23ea61-2eec-5e4c-94f3-c2b7718ccde1/scratchpad/login.png' });
+await p.fill('#login-pin', '1234'); await p.click('#btn-login');
+await p.waitForSelector('#dlg-pin[open]'); await p.waitForTimeout(500);
+await p.screenshot({ path: '/tmp/claude-0/-home-claude/6f23ea61-2eec-5e4c-94f3-c2b7718ccde1/scratchpad/force.png' });
+await b.close(); srv.kill();
