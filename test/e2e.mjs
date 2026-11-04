@@ -294,7 +294,7 @@ await step('ขอเพิ่มรายชื่อ (แจ้งผลด้
   await page.click('#btn-open-request');
   await page.fill('#req-first', "แอน'นา");
   await page.fill('#req-last', 'ทดลอง "ใหม่"');
-  await page.selectOption('#req-position', 'นักเทคนิคการแพทย์(MT Parttime)');
+  await page.selectOption('#req-position', 'นักเทคนิคการแพทย์ (Part time)');
   await page.fill('#req-pin', '7395'); await page.fill('#req-pin2', '7395');
   await page.click('#request-form button[type=submit]');
   await expectToast(page, /ส่งคำขอเรียบร้อย/);
@@ -713,7 +713,7 @@ await step('[R30] ผู้ดูแล: กรองช่วงวันที
   await adm.click('#roster-views [data-view="missing"]');
   assert.match(await adm.textContent('#pane-missing'), /ใหม่ ล่าสุด/);
   assert.match(await adm.textContent('#adm-stats'), /ยังไม่จอง \d+ คน/);
-  await adm.selectOption('#f-position', 'นักเทคนิคการแพทย์(MT Parttime)');
+  await adm.selectOption('#f-position', 'นักเทคนิคการแพทย์ (Part time)');
   assert.doesNotMatch(await adm.textContent('#pane-missing'), /ใหม่ ล่าสุด/, 'กรองตามตำแหน่ง');
   await adm.screenshot({ path: path.join(OUT, 'pc-admin-missing.png') });
   const [dl] = await Promise.all([adm.waitForEvent('download'), adm.click('#adm-excel')]);
@@ -721,11 +721,11 @@ await step('[R30] ผู้ดูแล: กรองช่วงวันที
   const f = path.join(OUT, 'export-range.xlsx'); await dl.saveAs(f);
   const wb = XLSX.readFile(f);
   const main = XLSX.utils.sheet_to_json(wb.Sheets['ตารางเวร']);
-  assert.ok(main.length > 0 && main.every((r) => r['ตำแหน่ง'] === 'นักเทคนิคการแพทย์(MT Parttime)'), 'Export เฉพาะตำแหน่งที่กรอง');
+  assert.ok(main.length > 0 && main.every((r) => r['ตำแหน่ง'] === 'นักเทคนิคการแพทย์ (Part time)'), 'Export เฉพาะตำแหน่งที่กรอง');
   const grid = XLSX.utils.sheet_to_json(wb.Sheets['ตารางเวร (ตาราง)'], { header: 1 });
   assert.equal(grid[1][0], '1 พฤศจิกายน 2569'); assert.equal(grid[grid.length - 1][0], '31 ธันวาคม 2569', 'Export ข้ามเดือน');
   const miss = XLSX.utils.sheet_to_json(wb.Sheets['ยังไม่จอง']);
-  assert.ok(miss.every((r) => r['ตำแหน่ง'] === 'นักเทคนิคการแพทย์(MT Parttime)'));
+  assert.ok(miss.every((r) => r['ตำแหน่ง'] === 'นักเทคนิคการแพทย์ (Part time)'));
   assert.equal(XLSX.utils.sheet_to_json(wb.Sheets['ตารางเวร (ตาราง)'], { header: 1 }).length, 62);
   await expectToast(adm, /ดาวน์โหลดไฟล์ Excel แล้ว/);
   await adm.selectOption('#f-position', '');

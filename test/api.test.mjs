@@ -134,7 +134,7 @@ test('จองวันธรรมดา: หลายช่วง, กัน�
   const r = ok(gas.call('saveBooking', { token: t, date: '2026-11-11', room: 'ห้องเจาะเลือด SMC', station: 'จุดเจาะเลือด', slots: ['08:30-12:30', '06:00-08:30'] }));
   const row = gas.values('Booking Data').find((x) => x[12] === r.id);
   assert.equal(row[2], 'ปิติ');
-  assert.equal(row[4], 'นักเทคนิคการแพทย์(MT Fulltime)งานห้องปฏิบัติการเวชศาสตร์ชันสูตร', 'ตำแหน่งมาจากรายชื่อ ไม่ใช่จากหน้าเว็บ');
+  assert.equal(row[4], 'พยาบาล (Part time)', 'ตำแหน่งมาจากรายชื่อ ไม่ใช่จากหน้าเว็บ');
   assert.ok(row[1] instanceof Date);
   assert.deepEqual(row.slice(7, 12), ['06:00-08:30', '08:30-12:30', '', '', ''], 'ลงคอลัมน์ เช้า/สาย ตามระบบเดิม');
   assert.match(row[0], /^2026\/11\/04, 09:00:00$/);
@@ -217,12 +217,12 @@ test('ย้อนหลังและรอบปิด: จอง/แก้�
 
 test('ขอเพิ่มรายชื่อ → รออนุมัติ → ผู้ดูแลอนุมัติ → เข้าสู่ระบบได้', () => {
   const gas = fresh();
-  err(gas.call('requestAccount', { firstName: 'สมชาย', lastName: 'ทดสอบดี', position: 'นักเทคนิคการแพทย์(MT Parttime)', pin: '2580' }), 'DUPLICATE');
-  err(gas.call('requestAccount', { firstName: '=cmd', lastName: 'x', position: 'นักเทคนิคการแพทย์(MT Parttime)', pin: '2580' }), 'BAD_REQUEST');
-  err(gas.call('requestAccount', { firstName: '<b>', lastName: 'x', position: 'นักเทคนิคการแพทย์(MT Parttime)', pin: '2580' }), 'BAD_REQUEST');
+  err(gas.call('requestAccount', { firstName: 'สมชาย', lastName: 'ทดสอบดี', position: 'นักเทคนิคการแพทย์ (Part time)', pin: '2580' }), 'DUPLICATE');
+  err(gas.call('requestAccount', { firstName: '=cmd', lastName: 'x', position: 'นักเทคนิคการแพทย์ (Part time)', pin: '2580' }), 'BAD_REQUEST');
+  err(gas.call('requestAccount', { firstName: '<b>', lastName: 'x', position: 'นักเทคนิคการแพทย์ (Part time)', pin: '2580' }), 'BAD_REQUEST');
   err(gas.call('requestAccount', { firstName: 'ใหม่', lastName: 'คนดี', position: 'ตำแหน่งปลอม', pin: '2580' }), 'BAD_REQUEST');
-  err(gas.call('requestAccount', { firstName: 'ใหม่', lastName: 'คนดี', position: 'นักเทคนิคการแพทย์(MT Parttime)', pin: '1234' }), 'WEAK_PIN');
-  ok(gas.call('requestAccount', { firstName: ' ใหม่ ', lastName: 'คนดี', position: 'นักเทคนิคการแพทย์(MT Parttime)', pin: '2468' }));
+  err(gas.call('requestAccount', { firstName: 'ใหม่', lastName: 'คนดี', position: 'นักเทคนิคการแพทย์ (Part time)', pin: '1234' }), 'WEAK_PIN');
+  ok(gas.call('requestAccount', { firstName: ' ใหม่ ', lastName: 'คนดี', position: 'นักเทคนิคการแพทย์ (Part time)', pin: '2468' }));
   assert.ok(!ok(gas.call('getPublicInfo')).staff.some((s) => s.name === 'ใหม่ คนดี'), 'pending ไม่แสดงในรายชื่อ');
   const at = admin(gas);
   const p = ok(gas.call('adminListStaff', { token: at })).find((s) => s.firstName === 'ใหม่');
@@ -327,7 +327,7 @@ test('ผู้ดูแล: วันหยุดและการตั้ง
 test('แถวใหม่จากระบบเดิม (ไม่มี ID) ถูกเติม ID อัตโนมัติ', () => {
   const gas = fresh();
   ok(gas.call('getPublicInfo'));
-  gas.sheets['Booking Data'].appendRow(['2026/11/04, 08:00:00', '2026-11-25', 'สมชาย', 'ทดสอบดี', 'นักเทคนิคการแพทย์(MT Parttime)', 'ห้องเจาะเลือด SMC', 'จุดเจาะเลือด', '06:00-08:30']);
+  gas.sheets['Booking Data'].appendRow(['2026/11/04, 08:00:00', '2026-11-25', 'สมชาย', 'ทดสอบดี', 'นักเทคนิคการแพทย์ (Part time)', 'ห้องเจาะเลือด SMC', 'จุดเจาะเลือด', '06:00-08:30']);
   const t = loginAs(gas, 'สมชาย');
   const b = ok(gas.call('getMyBookings', { token: t, month: '2026-11' })).bookings.find((x) => x.date === '2026-11-25');
   assert.ok(b && /^B/.test(b.id));
@@ -444,7 +444,7 @@ test('[R10] ชีต Staff รุ่นเก่า (9 คอลัมน์) �
     now: NOW, props: { ADMIN_USER: 'admin', ADMIN_PASS: 'secret-pass' },
     sheets: {
       'Booking Data': bookingRows(), Leave: [LEAVE_HEADER],
-      Staff: [['ID', 'ชื่อ', 'นามสกุล', 'ตำแหน่ง', 'สถานะ', 'PIN Hash', 'Salt', 'สร้างเมื่อ', 'อัปเดตเมื่อ'], ['S1', 'ก', 'ข', 'นักเทคนิคการแพทย์(MT Parttime)', 'active', '', '', '', '']]
+      Staff: [['ID', 'ชื่อ', 'นามสกุล', 'ตำแหน่ง', 'สถานะ', 'PIN Hash', 'Salt', 'สร้างเมื่อ', 'อัปเดตเมื่อ'], ['S1', 'ก', 'ข', 'นักเทคนิคการแพทย์ (Part time)', 'active', '', '', '', '']]
     }
   });
   ok(gas.call('getPublicInfo'));
