@@ -14,7 +14,7 @@ const PUB = path.join(ROOT, 'public');
 const PORT = Number(process.env.PORT || 3000);
 // ใช้ security headers ชุดเดียวกับ vercel.json เพื่อให้การทดสอบตรงกับของจริง (รวม CSP)
 const VERCEL_HEADERS = JSON.parse(fs.readFileSync(path.join(ROOT, 'vercel.json'), 'utf8')).headers[0].headers;
-const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.json': 'application/json', '.svg': 'image/svg+xml', '.png': 'image/png', '.webmanifest': 'application/manifest+json', '.woff2': 'font/woff2', '.ics': 'text/calendar' };
+const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.json': 'application/json', '.svg': 'image/svg+xml', '.png': 'image/png', '.ico': 'image/x-icon', '.webmanifest': 'application/manifest+json', '.woff2': 'font/woff2', '.ics': 'text/calendar' };
 
 let gas;
 // FIXTURE_FILE=ไฟล์ JSON {values:[[...]]} ของแท็บ Booking Data (ไม่รวมหัวตาราง) เพื่อทดสอบกับข้อมูลจริงบนเครื่อง — อย่า commit ไฟล์ข้อมูลจริง

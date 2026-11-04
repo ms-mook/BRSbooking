@@ -89,6 +89,15 @@ await step('หน้าเข้าสู่ระบบโหลดได้ �
   await page.waitForFunction(() => document.querySelectorAll('svg.lucide').length > 10 && !document.querySelector('#view-login i[data-lucide]'));
 });
 
+await step('ไอคอนเว็บ: favicon.ico / SVG / ไอคอนแอปใน manifest โหลดได้ครบ', async () => {
+  const man = await (await page.request.get(BASE + '/manifest.webmanifest')).json();
+  const urls = ['favicon.ico', 'icons/icon.svg', 'icons/apple-touch-icon.png'].concat(man.icons.map((i) => i.src));
+  const r = [];
+  for (const u of urls) { const res = await page.request.get(BASE + '/' + u); r.push(u + ':' + res.status() + ':' + (await res.body()).length); }
+  r.forEach((x) => { const [u, st, n] = x.split(':'); assert.equal(st, '200', u); assert.ok(+n > 200, u + ' ว่าง'); });
+  assert.equal(await page.getAttribute('link[rel=icon][href="favicon.ico"]', 'sizes'), '16x16 32x32 48x48');
+});
+
 await step('เลือกชื่อ → เข้าด้วย PIN เริ่มต้น 1234 → ถูกบังคับตั้ง PIN ใหม่ (กัน PIN ง่าย)', async () => {
   await page.fill('#staff-search', 'zzz');
   assert.match(await page.textContent('#staff-options'), /ไม่พบชื่อ/);

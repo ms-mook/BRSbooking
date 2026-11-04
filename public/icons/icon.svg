@@ -1,1 +1,17 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><rect width="512" height="512" rx="112" fill="#0082ce"/><path d="M256 92c-52 70-108 136-108 196a108 108 0 0 0 216 0c0-60-56-126-108-196z" fill="#fff"/><path d="M214 300h84M256 258v84" stroke="#0082ce" stroke-width="26" stroke-linecap="round"/></svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <title>ระบบจองเวร BRS</title>
+  <defs><clipPath id="page"><rect x="11" y="15" width="42" height="38" rx="6"/></clipPath></defs>
+  <rect width="64" height="64" rx="14" fill="#12303F"/>
+  <rect x="11" y="15" width="42" height="38" rx="6" fill="#FFFFFF"/>
+  <g clip-path="url(#page)">
+    <rect x="11" y="15" width="7" height="11" fill="#4E9BD4"/>
+    <rect x="18" y="15" width="7" height="11" fill="#C73E37"/>
+    <rect x="25" y="15" width="7" height="11" fill="#D3A21F"/>
+    <rect x="32" y="15" width="7" height="11" fill="#2F9160"/>
+    <rect x="39" y="15" width="7" height="11" fill="#8466BE"/>
+    <rect x="46" y="15" width="7" height="11" fill="#87929A"/>
+  </g>
+  <rect x="20" y="9" width="5" height="11" rx="2.5" fill="#FFFFFF" stroke="#12303F" stroke-width="2"/>
+  <rect x="39" y="9" width="5" height="11" rx="2.5" fill="#FFFFFF" stroke="#12303F" stroke-width="2"/>
+  <path d="M22.5 39.5l6 6 13-13" fill="none" stroke="#0B7FC0" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
