@@ -225,6 +225,26 @@ body[data-loading] .progress-line { opacity: 1; }
 .pin-field:focus-within .pin-cells span.on { border-color: currentColor; }
 .pin-field:focus-within { outline: 2px solid var(--color-primary); outline-offset: 4px; border-radius: .9rem; }
 
+/* จอ PC ใหญ่: ใช้พื้นที่เต็มขึ้น ขยายแผงและตัวอักษรตามความกว้างจอ (วางท้ายเพื่อชนะกฎก่อนหน้า) */
+@media (min-width: 1280px) {
+  .login-wrap {
+    max-width: none; padding: 3rem clamp(3rem, 6vw, 8rem);
+    grid-template-columns: minmax(0, 1fr) clamp(30rem, 33vw, 42rem); column-gap: clamp(3rem, 5vw, 7rem);
+  }
+  .login-unit { font-size: clamp(1.05rem, 1.1vw, 1.3rem); }
+  .login-dow, .login-year { font-size: clamp(1.6rem, 2vw, 2.6rem); }
+  .login-dm { font-size: clamp(5rem, 7.4vw, 10rem); }
+  .login-round { font-size: clamp(1.15rem, 1.45vw, 1.75rem); margin-top: 2.5rem; }
+  .login-round::before { width: .85rem; height: .85rem; }
+  .login-notice:not(:empty) { max-width: 50rem; font-size: clamp(1.05rem, 1.15vw, 1.35rem); margin-top: 2rem; }
+  .login-body { padding: 2.75rem 3rem 1.6rem; gap: 1.4rem; }
+  .login-title { font-size: clamp(1.8rem, 2.1vw, 2.5rem); }
+  .login-sub, .login-label { font-size: clamp(.95rem, 1vw, 1.15rem); }
+  .tube-rail { height: .75rem; }
+  .pin-cells { gap: .7rem; }
+  .pin-cells span { height: clamp(3.5rem, 4.2vw, 4.75rem); }
+}
+
 /* จังหวะเปิดหน้า: แถบสีหลอดค่อยๆ เติมจากซ้ายไปขวา ครั้งเดียว */
 @media (prefers-reduced-motion: no-preference) {
   .login-stage:not([hidden]) .tube-rail i { animation: tube-in .5s cubic-bezier(.2,.8,.2,1) both; transform-origin: left; }
