@@ -208,9 +208,21 @@ await step('จองวันธรรมดาหลายช่วง (แจ
   await expectToast(page, /ช่วงเวลา/);
   await page.check('#booking-slots input[value="06:00-08:30"]');
   await page.check('#booking-slots input[value="12:30-16:30"]');
+  const calls = [];
+  const onReq = (r) => { if (r.url().endsWith('/api/gas')) calls.push(JSON.parse(r.postData()).fn); };
+  page.on('request', onReq);
   await page.click('#booking-submit');
+  // [R33] บันทึกเร็ว: ปิดหน้าต่างทันที ปฏิทินขึ้น "กำลังบันทึก" แล้วเรียก server รอบเดียว
+  assert.ok(!(await page.evaluate(() => document.getElementById('dlg-booking').open)), 'ปิดหน้าต่างทันทีที่กดบันทึก');
+  assert.match(await day(page, 12).textContent(), /กำลังบันทึก/);
   await expectToast(page, /บันทึกการจองสำเร็จ/);
+  await page.waitForFunction(() => !document.body.dataset.loading);
+  await page.waitForTimeout(300);
+  page.off('request', onReq);
+  assert.deepEqual(calls, ['saveBooking'], 'บันทึกครั้งเดียวไม่ต้องโหลดข้อมูลซ้ำ: ' + calls.join(','));
+  assert.doesNotMatch(await day(page, 12).textContent(), /กำลังบันทึก/);
   assert.match(await day(page, 12).textContent(), /OPD เช้า·บ่าย/);
+  assert.match(await page.textContent('#kpis'), /เวรเดือนพฤศจิกายน/);
   assert.match(await page.textContent('#day-panel'), /06:00-08:30/);
 });
 
@@ -240,6 +252,24 @@ await step('วันเสาร์: เลือกได้ 1 ช่วง (r
   await expectToast(page, /สำเร็จ/);
   assert.ok(await page.isDisabled('#btn-book'));
   assert.match(await page.textContent('#day-panel'), /จองครบ 1 เวรแล้ว/);
+});
+
+await step('[R33] บันทึกไม่สำเร็จ: แจ้งเตือน แล้วเปิดหน้าต่างเดิมพร้อมค่าที่เลือกไว้ให้แก้ต่อ', async () => {
+  await day(page, 19).click();
+  await page.click('#btn-book');
+  await page.selectOption('#booking-room', 'ห้องเจาะเลือด SMC');
+  await page.selectOption('#booking-station', 'จุดเจาะเลือด');
+  await page.check('#booking-slots input[value="08:30-12:30"]');
+  await page.route('**/api/gas', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: false, error: 'พบการจองซ้ำซ้อนในวันเดียวกัน', code: 'DUPLICATE' }) }), { times: 1 });
+  await page.click('#booking-submit');
+  await expectToast(page, /พบการจองซ้ำซ้อน/);
+  await page.waitForSelector('#dlg-booking[open]');
+  assert.equal(await page.inputValue('#booking-room'), 'ห้องเจาะเลือด SMC');
+  assert.equal(await page.inputValue('#booking-station'), 'จุดเจาะเลือด');
+  assert.ok(await page.isChecked('#booking-slots input[value="08:30-12:30"]'));
+  assert.doesNotMatch(await day(page, 19).textContent(), /กำลังบันทึก|SMC/);
+  await page.click('#dlg-booking [data-close]');
+  await page.waitForFunction(() => !document.getElementById('dlg-booking').open);
 });
 
 await step('แก้ไขการจอง', async () => {

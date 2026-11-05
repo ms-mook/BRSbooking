@@ -533,6 +533,27 @@
     return r;
   }
 
+  // ใช้ข้อมูลที่ส่งกลับมาพร้อมคำตอบบันทึก/ยกเลิก (ไม่ต้องเรียก server ซ้ำอีก 2 รอบ)
+  async function applyView(v) {
+    if (v && v.month === S.month) {
+      S.my = { bookings: v.bookings, leaves: v.leaves };
+      S.upcoming = v.upcoming;
+      if (v.today) S.info.today = v.today;
+      renderKpis();
+    } else {
+      await loadMyMonth();
+      if (v) { S.upcoming = v.upcoming; renderKpis(); } else loadUpcoming();
+    }
+    renderCalendar();
+  }
+
+  function reopenBooking(saved) {
+    openBooking({ mode: saved.mode, date: saved.date, dates: saved.dates, booking: saved.booking });
+    $('booking-room').value = saved.room;
+    fillStations(saved.station);
+    renderSlots(saved.slots);
+  }
+
   let monthBusy = false;
   async function changeMonth(delta) {
     if (monthBusy) return;
@@ -574,7 +595,10 @@
       if (key === S.selected) cls.push('is-selected');
       if (S.multi && S.multi.indexOf(key) >= 0) cls.push('is-picked');
       const mine = S.my.bookings.filter((b) => b.date === key);
-      const chips = mine.map((b) => '<span class="chip">' + esc(ROOM_SHORT(b.room)) + '<span class="slots"> ' + esc(b.slots.map((s) => SLOT_SHORT[s] || s).join('·')) + '</span></span>').join('');
+      const pending = S.pending && S.pending.indexOf(key) >= 0;
+      if (pending) cls.push('is-pending');
+      const chips = mine.map((b) => '<span class="chip">' + esc(ROOM_SHORT(b.room)) + '<span class="slots"> ' + esc(b.slots.map((s) => SLOT_SHORT[s] || s).join('·')) + '</span></span>').join('') +
+        (pending ? '<span class="chip chip-pending"><span class="loading loading-spinner loading-xs"></span> กำลังบันทึก</span>' : '');
       const label = fmtDate(key, true) + (hol ? ' ' + hol.name : '') + (mine.length ? ' มีเวร ' + mine.length + ' รายการ' : '');
       html += '<button type="button" class="' + cls.join(' ') + '" style="--i:' + d + '" data-date="' + key + '" aria-label="' + esc(label) + '"><span class="num"><span>' + d + '</span>' + (hol ? '<span class="hol-dot"></span>' : '') + '</span>' +
         (hol ? '<span class="hname">' + esc(hol.name) + '</span>' : '') + chips + '</button>';
@@ -684,12 +708,10 @@
     });
     if (!r) return;
     try {
-      const res = await api('cancelBooking', { token: S.token, id: b.id, reason: r.value }, { btn: btn });
+      const res = await api('cancelBooking', { token: S.token, id: b.id, reason: r.value, month: S.month }, { btn: btn });
       toast(res.message, 'ok');
-      await loadMyMonth();
-      renderCalendar();
+      await applyView(res.view);
       selectDay(b.date, true);
-      loadUpcoming();
     } catch (e) { toast(e.message, 'err'); }
   }
 
@@ -765,21 +787,34 @@
     if (!slots.length) { toast('กรุณาเลือกช่วงเวลา', 'warn'); return; }
     const btn = $('booking-submit');
     if (btn.disabled) return; // กันกดซ้ำ
-    try {
-      if (BK.mode === 'bulk') {
-        const res = await api('saveBookings', { token: S.token, dates: BK.dates, room: args.room, station: args.station, slots: args.slots }, { btn: btn });
-        $('dlg-booking').close();
-        setMulti(false);
-        await loadMyMonth();
-        renderCalendar();
-        loadUpcoming();
-        if (!res.failed) toast(res.message, 'ok');
+    if (BK.mode === 'bulk' || BK.mode === 'user') {
+      // ปิดหน้าต่างทันทีแล้วบันทึกเบื้องหลัง (ปฏิทินขึ้น "กำลังบันทึก") — ถ้าไม่สำเร็จจะเปิดหน้าต่างเดิมพร้อมค่าที่เลือกไว้ให้แก้
+      const bulk = BK.mode === 'bulk';
+      const saved = { mode: BK.mode, date: BK.date, dates: BK.dates, booking: BK.booking, room: args.room, station: args.station, slots: args.slots };
+      const payload = bulk ? { token: S.token, dates: BK.dates, room: args.room, station: args.station, slots: args.slots, month: S.month } : Object.assign({}, args, { token: S.token, month: S.month });
+      $('dlg-booking').close();
+      if (bulk) setMulti(false);
+      S.pending = bulk ? saved.dates.slice() : [date];
+      renderCalendar();
+      try {
+        const res = await api(bulk ? 'saveBookings' : 'saveBooking', payload);
+        S.pending = null;
+        await applyView(res.view);
+        if (!bulk) selectDay(date, true);
+        if (!bulk || !res.failed) toast(res.message, 'ok');
         else {
           toast(res.message, 'warn');
           await ask({ title: 'บางวันจองไม่สำเร็จ', icon: 'triangle-alert', alertOnly: true, okText: 'รับทราบ', text: res.results.filter((r) => !r.ok).map((r) => '• ' + fmtDate(r.date, true) + ': ' + r.error).join('\n') });
         }
-        return;
+      } catch (e) {
+        S.pending = null;
+        renderCalendar();
+        toast(e.message, e.code === 'DUPLICATE' || e.code === 'RULE' || e.code === 'CLOSED' || e.code === 'HOLIDAY' ? 'warn' : 'err');
+        if (e.code !== 'SESSION' && e.code !== 'MUST_CHANGE') reopenBooking(saved);
       }
+      return;
+    }
+    try {
       if (BK.mode === 'admin') {
         args.staffId = $('booking-staff').value;
         if (!args.staffId) { toast('กรุณาเลือกบุคลากร', 'warn'); return; }
@@ -797,15 +832,6 @@
         $('dlg-booking').close();
         toast(res.message, 'ok');
         await loadAdminMonth();
-      } else {
-        args.token = S.token;
-        const res = await api('saveBooking', args, { btn: btn });
-        $('dlg-booking').close();
-        toast(res.message, 'ok');
-        await loadMyMonth();
-        renderCalendar();
-        selectDay(date, true);
-        loadUpcoming();
       }
     } catch (e) { toast(e.message, e.code === 'DUPLICATE' || e.code === 'RULE' || e.code === 'CLOSED' ? 'warn' : 'err'); }
   }

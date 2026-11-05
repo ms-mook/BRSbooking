@@ -133,8 +133,17 @@ function doGet() {
   return json_({ ok: true, data: { service: 'BRSbooking API', time: nowStr_() } });
 }
 
+// แคชภายในคำขอเดียว (ล้างทุกครั้งที่เริ่มคำขอใหม่) — ลดการเปิดชีต/อ่านแท็บเดิมซ้ำ ทำให้บันทึกเร็วขึ้น
+let REQ_ = {};
+function memo_(key, fn) {
+  if (!Object.prototype.hasOwnProperty.call(REQ_, key)) REQ_[key] = fn();
+  return REQ_[key];
+}
+function forget_(key) { delete REQ_[key]; }
+
 function doPost(e) {
   let out;
+  REQ_ = {};
   try {
     const body = (e && e.postData && e.postData.contents) || '';
     if (!body) throw appError_('ไม่มีข้อมูลคำขอ', 'BAD_REQUEST');
@@ -251,6 +260,22 @@ function getMyBookings_(a) {
   return { user: publicUser_(staff), today: todayKey_(), mustChange: !!staff.mustChange, from: range.from, to: range.to, bookings: bookings.map(cleanBooking_), leaves: leaves.map(cleanBooking_) };
 }
 
+/** ข้อมูลของผู้ใช้หลังบันทึก/ยกเลิก ส่งกลับในคำตอบเดียวกัน หน้าเว็บจะได้ไม่ต้องเรียกโหลดซ้ำอีก 2 รอบ */
+function myView_(staff, month) {
+  if (!/^\d{4}-\d{2}$/.test(str_(month))) return null;
+  let range;
+  try { range = monthRange_(month, false); } catch (e) { return null; } // บันทึกสำเร็จแล้ว อย่าให้เดือนผิดรูปแบบทำให้ดูเหมือนล้มเหลว
+  const today = todayKey_();
+  const bookings = readBookings_().filter(function (b) { return b.key === staff.key; });
+  const inMonth = function (b) { return b.date >= range.from && b.date <= range.to; };
+  return {
+    month: month, today: today,
+    bookings: bookings.filter(inMonth).sort(byDate_).map(cleanBooking_),
+    leaves: readLeaves_().filter(function (b) { return b.key === staff.key && inMonth(b); }).sort(byDate_).map(cleanBooking_),
+    upcoming: bookings.filter(function (b) { return b.date >= today; }).sort(byDate_).map(cleanBooking_)
+  };
+}
+
 function saveBooking_(a) {
   const staff = requireUser_(a.token);
   const input = validBookingInput_(a, false);
@@ -267,7 +292,7 @@ function saveBooking_(a) {
     checkDuplicate_(all, staff.key, input, existing ? existing.id : null, settings);
     const row = bookingRow_(input, staff, existing ? existing.id : newId_('B'));
     writeBooking_(row, existing);
-    return { id: row[12], message: existing ? 'แก้ไขการจองสำเร็จ' : 'บันทึกการจองสำเร็จ' };
+    return { id: row[12], message: existing ? 'แก้ไขการจองสำเร็จ' : 'บันทึกการจองสำเร็จ', view: myView_(staff, a.month) };
   });
 }
 
@@ -298,7 +323,7 @@ function saveBookings_(a) {
       }
     });
     const ok = results.filter(function (r) { return r.ok; }).length;
-    return { results: results, saved: ok, failed: results.length - ok, message: 'บันทึกการจอง ' + ok + ' วัน' + (results.length - ok ? ' (ไม่สำเร็จ ' + (results.length - ok) + ' วัน)' : '') };
+    return { results: results, saved: ok, failed: results.length - ok, message: 'บันทึกการจอง ' + ok + ' วัน' + (results.length - ok ? ' (ไม่สำเร็จ ' + (results.length - ok) + ' วัน)' : ''), view: myView_(staff, a.month) };
   });
 }
 
@@ -314,7 +339,7 @@ function cancelBooking_(a) {
     if (!open && !reason) throw appError_('รอบจองเดือนนี้ปิดแล้ว การยกเลิกจะบันทึกเป็นการลาเวร กรุณาระบุเหตุผล', 'NEED_REASON');
     const type = open ? 'ยกเลิกการจอง' : 'ลาเวร';
     moveToLeave_(b, type, reason, staff.firstName + ' ' + staff.lastName);
-    return { type: type, message: type === 'ลาเวร' ? 'บันทึกการลาเวรเรียบร้อย' : 'ยกเลิกการจองเรียบร้อย' };
+    return { type: type, message: type === 'ลาเวร' ? 'บันทึกการลาเวรเรียบร้อย' : 'ยกเลิกการจองเรียบร้อย', view: myView_(staff, a.month) };
   });
 }
 
@@ -423,6 +448,7 @@ function adminResetPin_(a) {
 }
 
 function adminSaveHolidays_(a) {
+  forget_('holidays');
   requireAdmin_(a.token);
   if (!Array.isArray(a.holidays)) throw appError_('ข้อมูลวันหยุดไม่ถูกต้อง', 'BAD_REQUEST');
   if (a.holidays.length > 500) throw appError_('จำนวนวันหยุดมากเกินไป', 'BAD_REQUEST');
@@ -515,6 +541,7 @@ function adminFetchHolidays_(a) {
 }
 
 function adminSaveSettings_(a) {
+  forget_('settings');
   requireAdmin_(a.token);
   const s = a.settings || {};
   const months = str_(s.BOOKING_MONTHS).split(',').map(function (m) { return m.trim(); }).filter(String);
@@ -640,13 +667,15 @@ function renameInBookings_(oldStaff, firstName, lastName, position) {
 /* =========================== Data access =========================== */
 
 function ss_() {
-  const id = prop_('SHEET_ID');
-  return id ? SpreadsheetApp.openById(id) : SpreadsheetApp.getActiveSpreadsheet();
+  return memo_('ss', function () {
+    const id = prop_('SHEET_ID');
+    return id ? SpreadsheetApp.openById(id) : SpreadsheetApp.getActiveSpreadsheet();
+  });
 }
 
 function sheet_(name) {
-  const sh = ss_().getSheetByName(name);
-  if (!sh) throw appError_('ไม่พบแท็บ "' + name + '" กรุณารัน setup()', 'NOT_CONFIGURED');
+  const sh = memo_('sh:' + name, function () { return ss_().getSheetByName(name); });
+  if (!sh) { forget_('sh:' + name); throw appError_('ไม่พบแท็บ "' + name + '" กรุณารัน setup()', 'NOT_CONFIGURED'); }
   return sh;
 }
 
@@ -781,6 +810,10 @@ function locateRow_(sh, id, col) {
 }
 
 function readStaff_() {
+  return memo_('staff', readStaffRaw_);
+}
+
+function readStaffRaw_() {
   const data = sheet_(CONFIG.SHEETS.STAFF).getDataRange().getValues();
   const out = [];
   for (let i = 1; i < data.length; i++) {
@@ -803,6 +836,7 @@ function findStaff_(id, list) {
 }
 
 function writeStaff_(s) {
+  forget_('staff');
   const sh = sheet_(CONFIG.SHEETS.STAFF);
   const row = locateRow_(sh, s.id, 1);
   s.updatedAt = nowStr_();
@@ -811,6 +845,7 @@ function writeStaff_(s) {
 }
 
 function appendStaff_(s) {
+  forget_('staff');
   const sh = sheet_(CONFIG.SHEETS.STAFF);
   sh.getRange(sh.getLastRow() + 1, 6, 1, 2).setNumberFormat('@');
   sh.appendRow([s.id, safeCell_(s.firstName), safeCell_(s.lastName), s.position, s.status, s.hash, s.salt, s.createdAt, s.updatedAt, s.mustChange ? 'TRUE' : '']);
@@ -825,6 +860,10 @@ function publicUser_(s) {
 }
 
 function readHolidays_() {
+  return memo_('holidays', readHolidaysRaw_);
+}
+
+function readHolidaysRaw_() {
   const data = sheet_(CONFIG.SHEETS.HOLIDAYS).getDataRange().getValues();
   const out = [];
   for (let i = 1; i < data.length; i++) {
@@ -835,6 +874,10 @@ function readHolidays_() {
 }
 
 function readSettings_() {
+  return memo_('settings', readSettingsRaw_);
+}
+
+function readSettingsRaw_() {
   const s = {};
   CONFIG.DEFAULT_SETTINGS.forEach(function (d) { s[d[0]] = d[1]; });
   const data = sheet_(CONFIG.SHEETS.SETTINGS).getDataRange().getValues();
@@ -1042,7 +1085,7 @@ function nowStr_() { return Utilities.formatDate(new Date(), CONFIG.TZ, 'yyyy/MM
 function norm_(v) { return String(v == null ? '' : v).replace(/\s+/g, ' ').trim(); }
 function str_(v) { return v == null ? '' : String(v).trim(); }
 function nameKey_(f, l) { return (norm_(f) + '|' + norm_(l)).toLowerCase(); }
-function prop_(k) { return PropertiesService.getScriptProperties().getProperty(k) || ''; }
+function prop_(k) { return memo_('props', function () { return PropertiesService.getScriptProperties().getProperties(); })[k] || ''; }
 
 let LOCK_DEPTH_ = 0;
 function withLock_(fn) {

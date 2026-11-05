@@ -583,3 +583,25 @@ test('[R32] ผู้ดูแลย้ายข้อมูลเก่าไ�
   assert.equal(gas.values('Archive Booking').filter((x) => x[1] === '2026-11-05').length, 2);
   assert.equal(gas.values('Archive Booking').length - 1, 4);
 });
+
+test('[R33] บันทึก/จองหลายวัน/ยกเลิก ส่งข้อมูลเดือนนี้ + เวรล่วงหน้ากลับมาในคำตอบเดียว (หน้าเว็บไม่ต้องโหลดซ้ำ)', () => {
+  const gas = fresh();
+  const ut = loginAs(gas, 'สมชาย');
+  const r = ok(gas.call('saveBooking', { token: ut, month: '2026-11', date: '2026-11-18', room: 'ห้องเจาะเลือด SMC', station: 'จุดเจาะเลือด', slots: ['06:00-08:30'] }));
+  assert.equal(r.view.month, '2026-11');
+  assert.ok(r.view.bookings.some((b) => b.id === r.id && b.date === '2026-11-18'));
+  assert.ok(r.view.upcoming.every((b) => b.date >= '2026-11-04'));
+  assert.ok(r.view.upcoming.some((b) => b.id === r.id));
+  const fresh2 = ok(gas.call('getMyBookings', { token: ut, month: '2026-11' }));
+  assert.deepEqual(r.view.bookings, fresh2.bookings, 'ตรงกับการโหลดใหม่');
+  const m = ok(gas.call('saveBookings', { token: ut, month: '2026-12', dates: ['2026-12-02', '2026-12-03'], room: 'ห้องเจาะเลือด SMC', station: 'จุดเจาะเลือด', slots: ['06:00-08:30'] }));
+  assert.equal(m.view.month, '2026-12');
+  assert.equal(m.view.bookings.filter((b) => b.date === '2026-12-02' || b.date === '2026-12-03').length, 2);
+  const c = ok(gas.call('cancelBooking', { token: ut, id: r.id, month: '2026-11' }));
+  assert.ok(!c.view.bookings.some((b) => b.id === r.id));
+  assert.ok(c.view.leaves.some((b) => b.id === r.id));
+  // ไม่ส่งเดือน / เดือนผิดรูปแบบ: บันทึกยังสำเร็จ แค่ไม่มี view
+  const n = ok(gas.call('saveBooking', { token: ut, month: '2026-13', date: '2026-11-19', room: 'ห้องเจาะเลือด SMC', station: 'จุดเจาะเลือด', slots: ['06:00-08:30'] }));
+  assert.equal(n.view, null);
+  assert.ok(ok(gas.call('getMyBookings', { token: ut, month: '2026-11' })).bookings.some((b) => b.id === n.id));
+});

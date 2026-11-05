@@ -110,7 +110,7 @@ export function createGas(opts = {}) {
       })
     },
     LockService: { getScriptLock: () => ({ tryLock: () => { calls.lock++; return true; }, waitLock: () => true, releaseLock: () => {} }) },
-    PropertiesService: { getScriptProperties: () => ({ getProperty: (k) => (k in props ? props[k] : null) }) },
+    PropertiesService: { getScriptProperties: () => ({ getProperty: (k) => (k in props ? props[k] : null), getProperties: () => ({ ...props }) }) },
     Utilities: {
       DigestAlgorithm: { SHA_256: 'sha256' },
       Charset: { UTF_8: 'utf8' },
