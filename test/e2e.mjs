@@ -315,6 +315,28 @@ await step('สรุปเวรของฉัน (เดือน / ล่ว
   await page.click('#dlg-summary [data-close]');
 });
 
+await step('[R34] สรุปเวร: วันเดียวกัน ห้องเดียวกัน จุดเดียวกัน รวมช่วงเวลาเป็นแถวเดียว', async () => {
+  const mk = (id, date, room, slots) => ({ id, date, room, station: 'จุดเจาะเลือด', slots, firstName: 'สมชาย', lastName: 'ทดสอบดี', position: 'x', timestamp: '' });
+  const fake = { user: { id: 'x', firstName: 'สมชาย', lastName: 'ทดสอบดี', position: 'x' }, today: '2026-11-04', mustChange: false, from: '2026-12-01', to: '2026-12-31', leaves: [],
+    bookings: [mk('a', '2026-12-01', 'ห้องเจาะเลือดอาคารผู้ป่วยนอก OPD', ['08:30-12:30']), mk('b', '2026-12-01', 'ห้องเจาะเลือดอาคารผู้ป่วยนอก OPD', ['06:00-08:30']), mk('c', '2026-12-01', 'ห้องเจาะเลือด SMC', ['12:30-16:30']), mk('d', '2026-12-02', 'ห้องเจาะเลือดอาคารผู้ป่วยนอก OPD', ['06:00-08:30'])] };
+  await page.route('**/api/gas', async (route) => {
+    const fn = JSON.parse(route.request().postData()).fn;
+    if (fn === 'getMyBookings') return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, data: fake }) });
+    return route.fallback();
+  });
+  await page.click('#btn-summary');
+  await page.waitForSelector('#dlg-summary[open]');
+  await page.click('#summary-seg [data-mode="upcoming"]');
+  await idle(page);
+  const items = await page.$$eval('#summary-content ul.grid > li', (els) => els.map((e) => e.textContent.replace(/\s+/g, ' ')));
+  assert.equal(items.length, 3, 'OPD 1 ธ.ค. สองแถวรวมเป็นแถวเดียว: ' + items.join(' | '));
+  assert.match(items[0], /OPD.*06:00-08:30.*08:30-12:30/, 'ช่วงเวลาเรียงต่อกัน');
+  assert.match(items[1], /SMC.*12:30-16:30/);
+  assert.deepEqual(await page.$$eval('#sum-stats [data-stat]', (els) => els.map((e) => e.textContent)), ['2', '4', '0']);
+  await page.click('#dlg-summary [data-close]');
+  await page.unroute('**/api/gas');
+});
+
 await step('[R29] เปลี่ยนเดือน + วันหยุดนักขัตฤกษ์ปิดรับจอง (กดจอง/เลือกหลายวันไม่ได้)', async () => {
   await page.click('#cal-next');
   await idle(page);

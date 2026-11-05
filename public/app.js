@@ -597,7 +597,7 @@
       const mine = S.my.bookings.filter((b) => b.date === key);
       const pending = S.pending && S.pending.indexOf(key) >= 0;
       if (pending) cls.push('is-pending');
-      const chips = mine.map((b) => '<span class="chip">' + esc(ROOM_SHORT(b.room)) + '<span class="slots"> ' + esc(b.slots.map((s) => SLOT_SHORT[s] || s).join('·')) + '</span></span>').join('') +
+      const chips = groupBookings(mine).map((b) => '<span class="chip">' + esc(ROOM_SHORT(b.room)) + '<span class="slots"> ' + esc(b.slots.map((s) => SLOT_SHORT[s] || s).join('·')) + '</span></span>').join('') +
         (pending ? '<span class="chip chip-pending"><span class="loading loading-spinner loading-xs"></span> กำลังบันทึก</span>' : '');
       const label = fmtDate(key, true) + (hol ? ' ' + hol.name : '') + (mine.length ? ' มีเวร ' + mine.length + ' รายการ' : '');
       html += '<button type="button" class="' + cls.join(' ') + '" style="--i:' + d + '" data-date="' + key + '" aria-label="' + esc(label) + '"><span class="num"><span>' + d + '</span>' + (hol ? '<span class="hol-dot"></span>' : '') + '</span>' +
@@ -849,8 +849,21 @@
     openDialog('dlg-summary');
   }
 
+  // รวมรายการวันเดียวกัน ห้องเดียวกัน จุดเดียวกัน ให้ช่วงเวลาต่อกันในแถวเดียว (สำหรับแสดงผล — ข้อมูลในชีตไม่เปลี่ยน)
+  function groupBookings(list, extraKey) {
+    const map = new Map();
+    list.forEach((b) => {
+      const k = [b.date, b.room, b.station, extraKey ? extraKey(b) : ''].join('|');
+      const g = map.get(k);
+      if (g) b.slots.forEach((x) => { if (g.slots.indexOf(x) < 0) g.slots.push(x); });
+      else map.set(k, Object.assign({}, b, { slots: b.slots.slice() }));
+    });
+    return Array.from(map.values()).map((g) => Object.assign(g, { slots: sortSlots(g.slots) }));
+  }
+
   function summaryHtml(data, forPrint) {
-    const bookings = data.bookings;
+    const bookings = groupBookings(data.bookings);
+    const leaves = groupBookings(data.leaves, (b) => (b.type || '') + '|' + (b.reason || ''));
     const days = {};
     let slots = 0;
     bookings.forEach((b) => { days[b.date] = 1; slots += b.slots.length; });
@@ -858,14 +871,14 @@
     const nDays = Object.keys(days).length;
     if (forPrint) {
       let h = '<h1>สรุปเวรที่จอง — ' + esc(S.user.firstName + ' ' + S.user.lastName) + '</h1><p class="sub">' + esc(S.user.position) + ' · ' + esc(title) + '</p>';
-      h += '<div class="sum-row"><b>' + nDays + ' วัน</b><b>' + slots + ' ช่วงเวร</b><b>' + data.leaves.length + ' ลา/ยกเลิก</b></div>';
+      h += '<div class="sum-row"><b>' + nDays + ' วัน</b><b>' + slots + ' ช่วงเวร</b><b>' + leaves.length + ' ลา/ยกเลิก</b></div>';
       h += '<table><thead><tr><th>วันที่</th><th>ห้อง</th><th>จุดปฏิบัติงาน</th><th>ช่วงเวลา</th></tr></thead><tbody>';
       if (!bookings.length) h += '<tr><td colspan="4">ไม่มีเวรที่จอง</td></tr>';
       bookings.forEach((b) => { const hol = holidayOf(b.date); h += '<tr><td>' + esc(fmtDate(b.date, true)) + (hol ? '<br>' + esc(hol.name) : '') + '</td><td>' + esc(b.room) + '</td><td>' + esc(b.station) + '</td><td>' + esc(b.slots.join(', ')) + '</td></tr>'; });
       h += '</tbody></table>';
-      if (data.leaves.length) {
+      if (leaves.length) {
         h += '<h1 style="font-size:12pt;margin-top:10pt">ลาเวร / ยกเลิก</h1><table><thead><tr><th>วันที่</th><th>ประเภท</th><th>ห้อง / ช่วงเวลา</th><th>เหตุผล</th></tr></thead><tbody>';
-        data.leaves.forEach((b) => { h += '<tr><td>' + esc(fmtDate(b.date)) + '</td><td>' + esc(b.type) + '</td><td>' + esc(ROOM_SHORT(b.room)) + ' ' + esc(b.slots.join(', ')) + '</td><td>' + esc(b.reason || '-') + '</td></tr>'; });
+        leaves.forEach((b) => { h += '<tr><td>' + esc(fmtDate(b.date)) + '</td><td>' + esc(b.type) + '</td><td>' + esc(ROOM_SHORT(b.room)) + ' ' + esc(b.slots.join(', ')) + '</td><td>' + esc(b.reason || '-') + '</td></tr>'; });
         h += '</tbody></table>';
       }
       return h;
@@ -874,7 +887,7 @@
     html += '<div class="grid grid-cols-3 gap-2 my-3" id="sum-stats">' +
       '<div class="rounded-box bg-primary/10 p-3 text-center"><div class="flex justify-center text-primary">' + ic('calendar-check', 'w-5 h-5') + '</div><div class="text-2xl font-bold" data-stat="days">' + nDays + '</div><div class="text-xs opacity-70">วัน</div></div>' +
       '<div class="rounded-box bg-success/10 p-3 text-center"><div class="flex justify-center text-success">' + ic('clock', 'w-5 h-5') + '</div><div class="text-2xl font-bold" data-stat="slots">' + slots + '</div><div class="text-xs opacity-70">ช่วงเวร</div></div>' +
-      '<div class="rounded-box bg-warning/10 p-3 text-center"><div class="flex justify-center text-warning">' + ic('calendar-x', 'w-5 h-5') + '</div><div class="text-2xl font-bold" data-stat="leaves">' + data.leaves.length + '</div><div class="text-xs opacity-70">ลา/ยกเลิก</div></div></div>';
+      '<div class="rounded-box bg-warning/10 p-3 text-center"><div class="flex justify-center text-warning">' + ic('calendar-x', 'w-5 h-5') + '</div><div class="text-2xl font-bold" data-stat="leaves">' + leaves.length + '</div><div class="text-xs opacity-70">ลา/ยกเลิก</div></div></div>';
     html += '<ul class="grid gap-2">';
     if (!bookings.length) html += '<li class="text-center opacity-70 py-6">ไม่มีเวรที่จอง</li>';
     bookings.forEach((b, i) => {
@@ -885,9 +898,9 @@
         '<div class="flex-1 min-w-0"><div class="font-semibold">' + esc(b.room) + '</div><div class="text-sm opacity-70">' + esc(b.station) + (hol ? ' · <span class="text-holiday">' + esc(hol.name) + '</span>' : '') + '</div><div class="flex flex-wrap gap-1 mt-1">' + slotBadges(b.slots, 'badge-sm') + '</div></div></li>';
     });
     html += '</ul>';
-    if (data.leaves.length) {
+    if (leaves.length) {
       html += '<h4 class="font-bold mt-4 mb-2 flex items-center gap-2">' + ic('history', 'w-4 h-4 text-warning') + 'ลาเวร / ยกเลิก</h4><ul class="grid gap-1 text-sm">';
-      data.leaves.forEach((b) => { html += '<li class="flex flex-wrap gap-2"><span class="font-semibold">' + esc(fmtDate(b.date)) + '</span><span class="badge badge-sm ' + (b.type === 'ลาเวร' ? 'badge-warning' : 'badge-ghost') + '">' + esc(b.type) + '</span><span class="opacity-80">' + esc(ROOM_SHORT(b.room)) + ' ' + esc(b.slots.join(', ')) + (b.reason ? ' — ' + esc(b.reason) : '') + '</span></li>'; });
+      leaves.forEach((b) => { html += '<li class="flex flex-wrap gap-2"><span class="font-semibold">' + esc(fmtDate(b.date)) + '</span><span class="badge badge-sm ' + (b.type === 'ลาเวร' ? 'badge-warning' : 'badge-ghost') + '">' + esc(b.type) + '</span><span class="opacity-80">' + esc(ROOM_SHORT(b.room)) + ' ' + esc(b.slots.join(', ')) + (b.reason ? ' — ' + esc(b.reason) : '') + '</span></li>'; });
       html += '</ul>';
     }
     return html;
